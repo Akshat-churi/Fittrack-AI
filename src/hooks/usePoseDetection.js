@@ -73,7 +73,7 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
         poseRef.current.close();
       }
     };
-  }, [videoRef, canvasRef, onResults]);
+  }, [videoRef, canvasRef]);
 
   const startCamera = async () => {
     if (videoRef.current && poseRef.current) {

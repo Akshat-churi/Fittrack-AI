@@ -1,16 +1,13 @@
-# React + Vite
+# FitTrack AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Google sign-in setup
 
-Currently, two official plugins are available:
+This app uses Google Identity Services for real Google account sign-in.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Create an OAuth 2.0 Client ID in Google Cloud Console.
+2. Choose **Web application** as the application type.
+3. Add your dev origin, for example `http://localhost:5173`, under Authorized JavaScript origins.
+4. Copy `.env.example` to `.env` and set `VITE_GOOGLE_CLIENT_ID` to your Client ID.
+5. Restart the Vite dev server after changing `.env`.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Email/password accounts are still stored locally in the browser for this demo app.

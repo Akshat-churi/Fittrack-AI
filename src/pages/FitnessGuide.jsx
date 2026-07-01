@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, Activity, ArrowRight, Play } from 'lucide-react';
+import { StepCarousel, PUSHUP_STEPS, SQUAT_STEPS } from '../components/ExerciseSteps';
 
 const tutorials = {
   pushups: [
@@ -100,39 +101,30 @@ const tutorials = {
 };
 
 const GuideCard = ({ tutorial }) => (
-  <div className="premium-glass-card rounded-2xl p-5">
+  <div className="glass rounded-2xl p-5 border border-zinc-800/40 hover:border-brand-orange/20 transition-all">
     <div className="flex justify-between items-start mb-4">
       <h3 className="text-base font-bold text-white">{tutorial.title}</h3>
-      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
-        tutorial.difficulty === 'Beginner' ? 'bg-brand-orange/10 text-brand-orange border border-brand-orange/20' :
-        tutorial.difficulty === 'Intermediate' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
-        'bg-red-500/10 text-red-500 border border-red-500/20'
-      }`}>
-        {tutorial.difficulty}
-      </span>
+      <span className={`badge text-[9px] ${
+        tutorial.difficulty === 'Beginner'     ? 'badge-green' :
+        tutorial.difficulty === 'Intermediate' ? 'badge-orange' : 'badge-red'
+      }`}>{tutorial.difficulty}</span>
     </div>
-    <p className="text-slate-400 text-sm mb-5 leading-relaxed">{tutorial.description}</p>
-    
+    <p className="text-zinc-400 text-sm mb-5 leading-relaxed">{tutorial.description}</p>
     <div className="space-y-4">
       <div>
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">Technique</h4>
-        <ol className="space-y-3">
+        <h4 className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-2.5">Steps</h4>
+        <ol className="space-y-2.5">
           {tutorial.steps.map((step, idx) => (
-            <li key={idx} className="flex gap-2.5 items-start text-slate-300 text-sm">
-              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-brand-orange/10 text-brand-orange text-[10px] font-bold shrink-0 border border-brand-orange/20 mt-0.5">
-                {idx + 1}
-              </span>
+            <li key={idx} className="flex gap-2.5 items-start text-zinc-300 text-sm">
+              <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-orange/10 text-brand-orange text-[9px] font-black shrink-0 border border-brand-orange/20 mt-0.5">{idx+1}</span>
               <span className="leading-relaxed">{step}</span>
             </li>
           ))}
         </ol>
       </div>
-      
-      <div className="pt-4 border-t border-brand-border flex items-center gap-2">
-        <Activity className="w-4 h-4 text-brand-orange shrink-0" />
-        <span className="text-xs text-slate-400">
-          <strong className="text-white font-semibold">Focus:</strong> {tutorial.target}
-        </span>
+      <div className="pt-3 border-t border-zinc-800/40 flex items-center gap-2">
+        <Activity className="w-3.5 h-3.5 text-brand-orange shrink-0"/>
+        <span className="text-xs text-zinc-500"><strong className="text-zinc-300 font-semibold">Targets:</strong> {tutorial.target}</span>
       </div>
     </div>
   </div>
@@ -140,42 +132,47 @@ const GuideCard = ({ tutorial }) => (
 
 const FitnessGuide = () => {
   return (
-    <div className="min-h-[calc(100vh-4rem)] p-4 md:p-6 bg-transparent">
-      <div className="max-w-7xl mx-auto space-y-10">
-        <div className="text-center space-y-3 max-w-2xl mx-auto pt-4">
-          <div className="inline-flex items-center justify-center p-3 bg-brand-orange/10 rounded-xl mb-2 border border-brand-orange/20 shadow-[0_0_30px_rgba(255,126,51,0.06)]">
-            <BookOpen className="w-8 h-8 text-brand-orange" />
+    <div className="page pb-24 md:pb-8">
+      <div className="content-width space-y-10">
+        <div className="text-center space-y-3 max-w-2xl mx-auto pt-2">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-orange/10 border border-brand-orange/20 mb-2">
+            <BookOpen className="w-7 h-7 text-brand-orange"/>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-            Fitness <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-orange to-[#ff4b1f]">Tutorials</span>
-          </h1>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Elevate your training with our comprehensive guide to bodyweight mastery.
-          </p>
+          <h1 className="section-title">Fitness <span className="text-gradient">Guide</span></h1>
+          <p className="text-sm text-zinc-400 leading-relaxed">Master bodyweight exercises with step-by-step technique breakdowns.</p>
         </div>
 
-        <div className="space-y-12 pb-8">
-          {/* Push-ups Section */}
+        <div className="space-y-12 pb-6">
           <section>
             <div className="flex items-center gap-3 mb-6 border-l-4 border-brand-orange pl-4">
-              <h2 className="text-xl font-semibold text-white tracking-tight">Push-up Variations</h2>
+              <h2 className="text-xl font-black text-white">Push-up Variations</h2>
             </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              {tutorials.pushups.map((tut, idx) => (
-                <GuideCard key={idx} tutorial={tut} />
-              ))}
+            {/* ── Visual form guide ── */}
+            <div className="glass rounded-3xl border border-zinc-800/60 p-5 mb-6">
+              <StepCarousel
+                steps={PUSHUP_STEPS}
+                title="Standard Push-up · Form Breakdown"
+                accentColor="bg-brand-orange"
+              />
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {tutorials.pushups.map((t, i) => <GuideCard key={i} tutorial={t}/>)}
             </div>
           </section>
-
-          {/* Squats Section */}
           <section>
-            <div className="flex items-center gap-3 mb-6 border-l-4 border-brand-orange pl-4">
-              <h2 className="text-xl font-semibold text-white tracking-tight">Squat Variations</h2>
+            <div className="flex items-center gap-3 mb-6 border-l-4 border-accent-blue pl-4">
+              <h2 className="text-xl font-black text-white">Squat Variations</h2>
             </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              {tutorials.squats.map((tut, idx) => (
-                <GuideCard key={idx} tutorial={tut} />
-              ))}
+            {/* ── Visual form guide ── */}
+            <div className="glass rounded-3xl border border-zinc-800/60 p-5 mb-6">
+              <StepCarousel
+                steps={SQUAT_STEPS}
+                title="Standard Squat · Form Breakdown"
+                accentColor="bg-accent-blue"
+              />
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {tutorials.squats.map((t, i) => <GuideCard key={i} tutorial={t}/>)}
             </div>
           </section>
         </div>
