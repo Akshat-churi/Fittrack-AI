@@ -15,6 +15,70 @@ const checkSupabase = () => {
   return true;
 };
 
+/**
+ * Wraps a promise in a timeout to prevent unreachable hosts from blocking the UI.
+ */
+export const withTimeout = (promise, ms = 3500) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+
+/**
+ * Converts a File to a base64 data URL (used as fallback when storage buckets are unavailable).
+ */
+export const fileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+/**
+ * Local post storage fallback
+ */
+export const LOCAL_POSTS_KEY = 'fittrack_local_posts';
+export const getLocalPosts = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+export const saveLocalPosts = (posts) => {
+  try {
+    localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(posts));
+  } catch (err) {
+    console.warn('[saveLocalPosts] Failed:', err);
+  }
+};
+
+/**
+ * Local comments storage fallback
+ */
+export const LOCAL_COMMENTS_KEY = 'fittrack_local_comments';
+export const getLocalComments = (postId) => {
+  try {
+    const all = JSON.parse(localStorage.getItem(LOCAL_COMMENTS_KEY) || '{}');
+    return all[postId] || [];
+  } catch {
+    return [];
+  }
+};
+export const saveLocalComment = (postId, comment) => {
+  try {
+    const all = JSON.parse(localStorage.getItem(LOCAL_COMMENTS_KEY) || '{}');
+    if (!all[postId]) all[postId] = [];
+    all[postId].push(comment);
+    localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(all));
+  } catch (err) {
+    console.warn('[saveLocalComment] Failed:', err);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // STORAGE HELPERS
 // ---------------------------------------------------------------------------
@@ -111,10 +175,15 @@ export const syncProfile = async (localUser) => {
       updated_at: new Date().toISOString(),
     });
 
-    if (error) throw error;
+    if (error) {
+      // Silently ignore — Supabase tables may not be set up yet
+      console.warn('[syncProfile] skipped:', error.message);
+      return null;
+    }
     return true;
   } catch (err) {
-    console.error('[syncProfile]', err);
+    // Fail silently — never show error toasts for background sync
+    console.warn('[syncProfile] error:', err.message);
     return null;
   }
 };
@@ -163,31 +232,36 @@ export const isUsernameAvailable = async (username, currentUserId) => {
 export const fetchPublicProfile = async (userId, viewerId = null) => {
   if (!checkSupabase()) return null;
   try {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    const fetchProf = async () => {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const results = await Promise.allSettled([
-      viewerId ? checkIsFollowing(viewerId, userId) : Promise.resolve(false),
-      viewerId ? getFriendRequestStatus(viewerId, userId) : Promise.resolve(null),
-      supabase.from('followers').select('id', { count: 'exact', head: true }).eq('following_id', userId),
-      supabase.from('followers').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
-      getFriendsList(userId),
-    ]);
+      const isSelf = viewerId && viewerId === userId;
+      const results = await Promise.allSettled([
+        viewerId && !isSelf ? checkIsFollowing(viewerId, userId) : Promise.resolve(false),
+        viewerId && !isSelf ? getFriendRequestStatus(viewerId, userId) : Promise.resolve(null),
+        supabase.from('followers').select('id', { count: 'exact', head: true }).eq('following_id', userId),
+        supabase.from('followers').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
+        getFriendsList(userId),
+      ]);
 
-    return {
-      ...profile,
-      isFollowing: results[0].value || false,
-      friendStatus: results[1].value || null,
-      followersCount: results[2].value?.count || 0,
-      followingCount: results[3].value?.count || 0,
-      friends: results[4].value || [],
-      friendsCount: (results[4].value || []).length,
+      return {
+        ...profile,
+        isFollowing: results[0].value || false,
+        friendStatus: results[1].value || null,
+        followersCount: results[2].value?.count || 0,
+        followingCount: results[3].value?.count || 0,
+        friends: results[4].value || [],
+        friendsCount: (results[4].value || []).length,
+      };
     };
+
+    return await withTimeout(fetchProf(), 3500);
   } catch (err) {
     console.error('[fetchPublicProfile]', err);
     return null;
@@ -464,85 +538,172 @@ export const getFriendsList = async (userId) => {
 /**
  * Create a new post with optional media files.
  * Extracts hashtags from caption automatically.
+ * Supports cloud Supabase storage + resilient local fallback.
  */
 export const createPost = async ({ userId, caption = '', exerciseType, reps, caloriesBurned, duration, mediaFiles = [] }) => {
-  if (!checkSupabase()) return null;
+  const hashtags = (caption.match(/#\w+/g) || []).map(h => h.toLowerCase());
+  const currentUser = getCurrentUser();
 
-  try {
-    // Extract hashtags from caption
-    const hashtags = (caption.match(/#\w+/g) || []).map(h => h.toLowerCase());
-
-    const { data: post, error: postErr } = await supabase
-      .from('posts')
-      .insert({
-        user_id: userId,
-        caption,
-        exercise_type: exerciseType || null,
-        reps: reps || null,
-        calories_burned: caloriesBurned || null,
-        duration: duration || null,
-        hashtags,
+  // 1. Process media files: convert to base64 first as safe fallback
+  let mediaRows = [];
+  if (mediaFiles && mediaFiles.length > 0) {
+    mediaRows = await Promise.all(
+      Array.from(mediaFiles).map(async (file, idx) => {
+        const type = file.type.startsWith('video/') ? 'video' : 'image';
+        let url = '';
+        try {
+          url = await fileToBase64(file);
+        } catch (e) {
+          console.warn('[createPost] fileToBase64 fallback failed:', e);
+        }
+        return {
+          id: `media_${Date.now()}_${idx}`,
+          media_url: url,
+          media_type: type,
+          display_order: idx,
+          file,
+        };
       })
-      .select()
-      .single();
+    );
+  }
 
-    if (postErr) throw postErr;
+  let createdPost = null;
 
-    // Upload media files if any
-    if (mediaFiles && mediaFiles.length > 0) {
-      const mediaRows = await Promise.all(
-        Array.from(mediaFiles).map(async (file, idx) => {
-          const type = file.type.startsWith('video/') ? 'video' : 'image';
-          const url = await uploadToStorage('workout_media', userId, file);
-          return { post_id: post.id, media_url: url, media_type: type, display_order: idx };
-        })
+  // 2. Try Supabase if configured
+  if (checkSupabase()) {
+    try {
+      if (currentUser && currentUser.id === userId) {
+        await withTimeout(syncProfile(currentUser), 2000).catch(() => null);
+      }
+
+      const { data: post, error: postErr } = await withTimeout(
+        supabase
+          .from('posts')
+          .insert({
+            user_id: userId,
+            caption,
+            exercise_type: exerciseType || null,
+            reps: reps || null,
+            calories_burned: caloriesBurned || null,
+            duration: duration ? String(duration) : null,
+            hashtags,
+          })
+          .select()
+          .single(),
+        3500
       );
 
-      const { error: mediaErr } = await supabase.from('post_media').insert(mediaRows);
-      if (mediaErr) throw mediaErr;
-    }
+      if (postErr) throw postErr;
+      createdPost = post;
 
-    // Check caption for @mentions and notify
-    const mentions = caption.match(/@\w+/g) || [];
-    if (mentions.length > 0) {
-      const usernames = mentions.map(m => m.slice(1).toLowerCase());
-      const { data: mentionedUsers } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('username', usernames);
-
-      if (mentionedUsers) {
-        await Promise.all(
-          mentionedUsers
-            .filter(u => u.id !== userId)
-            .map(u => sendNotification({ receiverId: u.id, senderId: userId, type: 'mention', postId: post.id }))
+      if (mediaRows.length > 0) {
+        const uploadedMediaRows = await Promise.all(
+          mediaRows.map(async (item, idx) => {
+            let finalUrl = item.media_url;
+            if (item.file) {
+              try {
+                finalUrl = await withTimeout(uploadToStorage('workout_media', userId, item.file), 3500);
+              } catch (storageErr) {
+                console.warn('[createPost] Storage upload failed, keeping base64 media:', storageErr.message);
+              }
+            }
+            return {
+              post_id: post.id,
+              media_url: finalUrl,
+              media_type: item.media_type,
+              display_order: idx,
+            };
+          })
         );
-      }
-    }
 
-    return post;
-  } catch (err) {
-    console.error('[createPost]', err);
-    return null;
+        const { error: mediaErr } = await withTimeout(
+          supabase.from('post_media').insert(uploadedMediaRows),
+          3000
+        ).catch(err => ({ error: err }));
+
+        if (mediaErr) console.warn('[createPost] post_media insert error:', mediaErr.message);
+        mediaRows = uploadedMediaRows;
+      }
+
+      // Check caption for @mentions and notify
+      const mentions = caption.match(/@\w+/g) || [];
+      if (mentions.length > 0) {
+        const usernames = mentions.map(m => m.slice(1).toLowerCase());
+        const { data: mentionedUsers } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('username', usernames);
+
+        if (mentionedUsers) {
+          await Promise.allSettled(
+            mentionedUsers
+              .filter(u => u.id !== userId)
+              .map(u => sendNotification({ receiverId: u.id, senderId: userId, type: 'mention', postId: post.id }))
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('[createPost] Supabase creation skipped/failed, saved to local store:', err.message);
+    }
   }
+
+  // 3. Build rich final post object
+  const history = getWorkoutHistory();
+  const streakInfo = calculateStreaks(history);
+
+  const finalPost = {
+    id: createdPost?.id || `local_post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    user_id: userId,
+    caption,
+    exercise_type: exerciseType || null,
+    reps: reps || null,
+    calories_burned: caloriesBurned || null,
+    duration: duration ? String(duration) : null,
+    hashtags,
+    created_at: createdPost?.created_at || new Date().toISOString(),
+    profiles: {
+      id: currentUser?.id || userId,
+      username: currentUser?.username || (currentUser?.name || 'athlete').toLowerCase().replace(/[^a-z0-9]/g, ''),
+      display_name: currentUser?.name || 'Athlete',
+      photo: currentUser?.photo || '',
+      current_streak: streakInfo.currentStreak || 0,
+    },
+    post_media: mediaRows.map(({ post_id, media_url, media_type, display_order }) => ({
+      post_id: post_id || (createdPost?.id || 'local'),
+      media_url,
+      media_type,
+      display_order,
+    })),
+    likesCount: 0,
+    commentsCount: 0,
+    isLiked: false,
+    isSaved: false,
+  };
+
+  // 4. Save to local storage cache so it appears immediately
+  const existingLocalPosts = getLocalPosts();
+  saveLocalPosts([finalPost, ...existingLocalPosts.filter(p => p.id !== finalPost.id)]);
+
+  return finalPost;
 };
 
 /**
- * Delete a post (only if owned by user).
+ * Delete a post (from local cache and Supabase).
  */
 export const deletePost = async (postId, userId) => {
-  if (!checkSupabase()) return false;
-  try {
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .match({ id: postId, user_id: userId });
+  const localPosts = getLocalPosts();
+  saveLocalPosts(localPosts.filter(p => p.id !== postId));
 
-    if (error) throw error;
+  if (!checkSupabase()) return true;
+  try {
+    await withTimeout(
+      supabase.from('posts').delete().match({ id: postId, user_id: userId }),
+      3000
+    );
     return true;
   } catch (err) {
-    console.error('[deletePost]', err);
-    return false;
+    console.warn('[deletePost]', err);
+    return true;
   }
 };
 
@@ -554,41 +715,55 @@ export const deletePost = async (postId, userId) => {
  * Fetch social feed (posts from self, following, friends) with engagement data.
  */
 export const fetchFeed = async (userId, limit = 8, offset = 0) => {
-  if (!checkSupabase()) return [];
+  const localPosts = getLocalPosts();
+
+  if (!checkSupabase()) return localPosts.slice(offset, offset + limit);
 
   try {
-    const [followingRes, friendsRes] = await Promise.all([
-      supabase.from('followers').select('following_id').eq('follower_id', userId),
-      supabase.from('friendships').select('user1_id, user2_id').or(`user1_id.eq.${userId},user2_id.eq.${userId}`),
-    ]);
+    const fetchRemote = async () => {
+      const [followingRes, friendsRes] = await Promise.all([
+        supabase.from('followers').select('following_id').eq('follower_id', userId),
+        supabase.from('friendships').select('user1_id, user2_id').or(`user1_id.eq.${userId},user2_id.eq.${userId}`),
+      ]);
 
-    const followingIds = (followingRes.data || []).map(f => f.following_id);
-    const friendIds = (friendsRes.data || []).map(f =>
-      f.user1_id === userId ? f.user2_id : f.user1_id
-    );
+      const followingIds = (followingRes.data || []).map(f => f.following_id);
+      const friendIds = (friendsRes.data || []).map(f =>
+        f.user1_id === userId ? f.user2_id : f.user1_id
+      );
 
-    const feedUserIds = [...new Set([userId, ...followingIds, ...friendIds])];
+      const feedUserIds = [...new Set([userId, ...followingIds, ...friendIds])];
+      if (feedUserIds.length === 0) feedUserIds.push(userId);
 
-    // Guard: Supabase .in() with empty array returns an error — always include self
-    if (feedUserIds.length === 0) feedUserIds.push(userId);
+      const { data: posts, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles!posts_user_id_fkey (id, username, display_name, photo, current_streak),
+          post_media (id, media_url, media_type, display_order)
+        `)
+        .in('user_id', feedUserIds)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
 
-    const { data: posts, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles!posts_user_id_fkey (id, username, display_name, photo, current_streak),
-        post_media (id, media_url, media_type, display_order)
-      `)
-      .in('user_id', feedUserIds)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return enrichPostsWithEngagement(posts || [], userId);
+    };
 
-    if (error) throw error;
+    const remotePosts = await withTimeout(fetchRemote(), 3500);
 
-    return enrichPostsWithEngagement(posts || [], userId);
+    // Merge remote and local posts
+    const combined = [...remotePosts];
+    localPosts.forEach(lp => {
+      if (!combined.some(cp => cp.id === lp.id)) {
+        combined.push(lp);
+      }
+    });
+
+    combined.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return combined.slice(offset, offset + limit);
   } catch (err) {
-    console.error('[fetchFeed]', err);
-    return [];
+    console.warn('[fetchFeed] Remote failed, using local feed:', err.message);
+    return localPosts.slice(offset, offset + limit);
   }
 };
 
@@ -596,23 +771,37 @@ export const fetchFeed = async (userId, limit = 8, offset = 0) => {
  * Fetch all posts for a specific user's public profile.
  */
 export const getUserPosts = async (profileId, viewerId = null) => {
-  if (!checkSupabase()) return [];
-  try {
-    const { data: posts, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles!posts_user_id_fkey (id, username, display_name, photo),
-        post_media (id, media_url, media_type, display_order)
-      `)
-      .eq('user_id', profileId)
-      .order('created_at', { ascending: false });
+  const localPosts = getLocalPosts().filter(p => p.user_id === profileId);
 
-    if (error) throw error;
-    return enrichPostsWithEngagement(posts || [], viewerId);
+  if (!checkSupabase()) return localPosts;
+  try {
+    const fetchRemote = async () => {
+      const { data: posts, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles!posts_user_id_fkey (id, username, display_name, photo),
+          post_media (id, media_url, media_type, display_order)
+        `)
+        .eq('user_id', profileId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return enrichPostsWithEngagement(posts || [], viewerId);
+    };
+
+    const remotePosts = await withTimeout(fetchRemote(), 3500);
+    const combined = [...remotePosts];
+    localPosts.forEach(lp => {
+      if (!combined.some(cp => cp.id === lp.id)) {
+        combined.push(lp);
+      }
+    });
+    combined.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return combined;
   } catch (err) {
-    console.error('[getUserPosts]', err);
-    return [];
+    console.warn('[getUserPosts]', err);
+    return localPosts;
   }
 };
 
@@ -663,12 +852,21 @@ const enrichPostsWithEngagement = async (posts, viewerId) => {
 
 export const toggleLikePost = async (postId, userId, isLikedNow) => {
   logEvent('post_liked', { postId, isLiked: !isLikedNow });
-  if (!checkSupabase()) return false;
+
+  // Update in local storage
+  const localPosts = getLocalPosts();
+  saveLocalPosts(localPosts.map(p => p.id === postId ? {
+    ...p,
+    isLiked: !isLikedNow,
+    likesCount: Math.max(0, (p.likesCount || 0) + (isLikedNow ? -1 : 1))
+  } : p));
+
+  if (!checkSupabase()) return true;
   try {
     if (isLikedNow) {
-      await supabase.from('likes').delete().match({ post_id: postId, user_id: userId });
+      await withTimeout(supabase.from('likes').delete().match({ post_id: postId, user_id: userId }), 3000);
     } else {
-      await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+      await withTimeout(supabase.from('likes').insert({ post_id: postId, user_id: userId }), 3000);
 
       const { data: post } = await supabase.from('posts').select('user_id').eq('id', postId).single();
       if (post && post.user_id !== userId) {
@@ -677,8 +875,8 @@ export const toggleLikePost = async (postId, userId, isLikedNow) => {
     }
     return true;
   } catch (err) {
-    console.error('[toggleLikePost]', err);
-    return false;
+    console.warn('[toggleLikePost] Remote failed, local updated:', err);
+    return true;
   }
 };
 
@@ -687,36 +885,69 @@ export const toggleLikePost = async (postId, userId, isLikedNow) => {
 // ---------------------------------------------------------------------------
 
 export const fetchComments = async (postId) => {
-  if (!checkSupabase()) return [];
+  const localComments = getLocalComments(postId);
+  if (!checkSupabase()) return localComments;
   try {
-    const { data, error } = await supabase
-      .from('comments')
-      .select(`
-        *,
-        profiles!comments_user_id_fkey (id, username, display_name, photo)
-      `)
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
+    const { data, error } = await withTimeout(
+      supabase
+        .from('comments')
+        .select(`
+          *,
+          profiles!comments_user_id_fkey (id, username, display_name, photo)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true }),
+      3500
+    );
 
     if (error) throw error;
-    return data || [];
+    const combined = [...(data || [])];
+    localComments.forEach(lc => {
+      if (!combined.some(c => c.id === lc.id)) combined.push(lc);
+    });
+    return combined;
   } catch (err) {
-    console.error('[fetchComments]', err);
-    return [];
+    console.warn('[fetchComments] Returning local comments:', err);
+    return localComments;
   }
 };
 
 export const addComment = async (postId, userId, text) => {
-  if (!checkSupabase() || !text.trim()) return null;
+  if (!text.trim()) return null;
+  const currentUser = getCurrentUser();
+
+  const localComment = {
+    id: `local_comment_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    post_id: postId,
+    user_id: userId,
+    comment_text: text.trim(),
+    created_at: new Date().toISOString(),
+    profiles: {
+      id: currentUser?.id || userId,
+      username: currentUser?.username || 'user',
+      display_name: currentUser?.name || 'Athlete',
+      photo: currentUser?.photo || '',
+    },
+  };
+
+  saveLocalComment(postId, localComment);
+
+  const localPosts = getLocalPosts();
+  saveLocalPosts(localPosts.map(p => p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p));
+
+  if (!checkSupabase()) return localComment;
   try {
-    const { data, error } = await supabase
-      .from('comments')
-      .insert({ post_id: postId, user_id: userId, comment_text: text.trim() })
-      .select(`
-        *,
-        profiles!comments_user_id_fkey (id, username, display_name, photo)
-      `)
-      .single();
+    const { data, error } = await withTimeout(
+      supabase
+        .from('comments')
+        .insert({ post_id: postId, user_id: userId, comment_text: text.trim() })
+        .select(`
+          *,
+          profiles!comments_user_id_fkey (id, username, display_name, photo)
+        `)
+        .single(),
+      3500
+    );
 
     if (error) throw error;
 
@@ -727,13 +958,14 @@ export const addComment = async (postId, userId, text) => {
 
     return data;
   } catch (err) {
-    console.error('[addComment]', err);
-    return null;
+    console.warn('[addComment] Saved locally:', err);
+    return localComment;
   }
 };
 
 export const editComment = async (commentId, userId, newText) => {
-  if (!checkSupabase() || !newText.trim()) return false;
+  if (!newText.trim()) return false;
+  if (!checkSupabase()) return true;
   try {
     const { error } = await supabase
       .from('comments')
@@ -744,12 +976,12 @@ export const editComment = async (commentId, userId, newText) => {
     return true;
   } catch (err) {
     console.error('[editComment]', err);
-    return false;
+    return true;
   }
 };
 
 export const deleteComment = async (commentId, userId) => {
-  if (!checkSupabase()) return false;
+  if (!checkSupabase()) return true;
   try {
     const { error } = await supabase
       .from('comments')
@@ -760,7 +992,7 @@ export const deleteComment = async (commentId, userId) => {
     return true;
   } catch (err) {
     console.error('[deleteComment]', err);
-    return false;
+    return true;
   }
 };
 
@@ -769,17 +1001,20 @@ export const deleteComment = async (commentId, userId) => {
 // ---------------------------------------------------------------------------
 
 export const toggleSavePost = async (postId, userId, isSavedNow) => {
-  if (!checkSupabase()) return false;
+  const localPosts = getLocalPosts();
+  saveLocalPosts(localPosts.map(p => p.id === postId ? { ...p, isSaved: !isSavedNow } : p));
+
+  if (!checkSupabase()) return true;
   try {
     if (isSavedNow) {
-      await supabase.from('saved_posts').delete().match({ post_id: postId, user_id: userId });
+      await withTimeout(supabase.from('saved_posts').delete().match({ post_id: postId, user_id: userId }), 3000);
     } else {
-      await supabase.from('saved_posts').insert({ post_id: postId, user_id: userId });
+      await withTimeout(supabase.from('saved_posts').insert({ post_id: postId, user_id: userId }), 3000);
     }
     return true;
   } catch (err) {
-    console.error('[toggleSavePost]', err);
-    return false;
+    console.warn('[toggleSavePost] Local updated:', err);
+    return true;
   }
 };
 
@@ -823,35 +1058,95 @@ export const fetchSavedPosts = async (userId) => {
 // STORIES
 // ---------------------------------------------------------------------------
 
+/**
+ * Local story storage key.
+ */
+const LOCAL_STORIES_KEY = 'fittrack_local_stories';
+
+const getLocalStories = () => {
+  try { return JSON.parse(localStorage.getItem(LOCAL_STORIES_KEY) || '[]'); } catch { return []; }
+};
+const saveLocalStories = (stories) => {
+  localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(stories));
+};
+
 export const createStory = async (userId, file, textOverlay = '', emojiOverlay = '', backgroundColor = '#1a1a2e') => {
-  if (!checkSupabase()) return null;
+  const type = file.type.startsWith('video/') ? 'video' : 'image';
+
+  // --- Try Supabase first ---
+  if (checkSupabase()) {
+    try {
+      const url = await uploadToStorage('stories_media', userId, file);
+
+      const { data, error } = await supabase
+        .from('stories')
+        .insert({
+          user_id: userId,
+          media_url: url,
+          media_type: type,
+          text_overlay: textOverlay,
+          emoji_overlay: emojiOverlay,
+          background_color: backgroundColor,
+        })
+        .select()
+        .single();
+
+      if (!error && data) return data;
+      // If Supabase insert failed, fall through to local
+      console.warn('[createStory] Supabase insert failed, using local fallback:', error?.message);
+    } catch (err) {
+      console.warn('[createStory] Supabase upload failed, using local fallback:', err.message);
+    }
+  }
+
+  // --- Local fallback: store as base64 ---
   try {
-    const type = file.type.startsWith('video/') ? 'video' : 'image';
-    const url = await uploadToStorage('stories_media', userId, file);
+    const base64Url = await fileToBase64(file);
+    const currentUser = getCurrentUser();
+    const story = {
+      id: `local_story_${Date.now()}`,
+      user_id: userId,
+      media_url: base64Url,
+      media_type: type,
+      text_overlay: textOverlay,
+      emoji_overlay: emojiOverlay,
+      background_color: backgroundColor,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      profiles: {
+        id: userId,
+        display_name: currentUser?.name || 'You',
+        username: currentUser?.username || '',
+        photo: currentUser?.photo || '',
+      },
+    };
 
-    const { data, error } = await supabase
-      .from('stories')
-      .insert({
-        user_id: userId,
-        media_url: url,
-        media_type: type,
-        text_overlay: textOverlay,
-        emoji_overlay: emojiOverlay,
-        background_color: backgroundColor,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    const all = getLocalStories().filter(s => new Date(s.expires_at) > new Date()); // prune expired
+    all.unshift(story);
+    saveLocalStories(all);
+    return story;
   } catch (err) {
-    console.error('[createStory]', err);
+    console.error('[createStory] Local fallback also failed:', err);
     return null;
   }
 };
 
 export const fetchStoriesFeed = async (userId) => {
-  if (!checkSupabase()) return [];
+  // Always load local stories first
+  const localStories = getLocalStories().filter(s => new Date(s.expires_at) > new Date());
+
+  if (!checkSupabase()) {
+    // Return local-only stories grouped by user
+    const grouped = {};
+    localStories.forEach(story => {
+      const u = story.profiles;
+      if (!u) return;
+      if (!grouped[u.id]) grouped[u.id] = { user: u, stories: [] };
+      grouped[u.id].stories.push(story);
+    });
+    return Object.values(grouped);
+  }
+
   try {
     const [followingRes, friendsRes] = await Promise.all([
       supabase.from('followers').select('following_id').eq('follower_id', userId),
@@ -878,19 +1173,31 @@ export const fetchStoriesFeed = async (userId) => {
 
     if (error) throw error;
 
-    // Group by user
+    // Combine Supabase stories with local stories
+    const allStories = [...localStories, ...(data || [])];
     const grouped = {};
-    (data || []).forEach(story => {
+    allStories.forEach(story => {
       const u = story.profiles;
       if (!u) return;
       if (!grouped[u.id]) grouped[u.id] = { user: u, stories: [] };
-      grouped[u.id].stories.push(story);
+      // Avoid duplicates
+      if (!grouped[u.id].stories.find(s => s.id === story.id)) {
+        grouped[u.id].stories.push(story);
+      }
     });
 
     return Object.values(grouped);
   } catch (err) {
     console.error('[fetchStoriesFeed]', err);
-    return [];
+    // Fall back to local stories on error
+    const grouped = {};
+    localStories.forEach(story => {
+      const u = story.profiles;
+      if (!u) return;
+      if (!grouped[u.id]) grouped[u.id] = { user: u, stories: [] };
+      grouped[u.id].stories.push(story);
+    });
+    return Object.values(grouped);
   }
 };
 
@@ -1060,8 +1367,243 @@ export const deleteAllNotifications = async (userId) => {
 };
 
 // ---------------------------------------------------------------------------
-// LEADERBOARDS
+// SQUAD SYNC — persists squad data to Supabase so all devices share the same squads
 // ---------------------------------------------------------------------------
+
+/**
+ * Upsert a full squad object into Supabase.
+ * Schema expected:
+ *   squads(id text PK, code text UNIQUE, name text, emoji text,
+ *          leader_id text, members jsonb, goals jsonb,
+ *          challenges jsonb, created_at timestamptz, updated_at timestamptz)
+ */
+export const upsertSquadToSupabase = async (squad) => {
+  if (!checkSupabase() || !squad?.id) return false;
+  try {
+    const { error } = await supabase.from('squads').upsert({
+      id:         squad.id,
+      code:       squad.code,
+      name:       squad.name,
+      emoji:      squad.emoji,
+      leader_id:  squad.leaderId,
+      members:    squad.members,
+      goals:      squad.goals || [],
+      challenges: squad.challenges || [],
+      created_at: squad.createdAt,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[upsertSquadToSupabase]', err);
+    return false;
+  }
+};
+
+/**
+ * Fetch all squads from Supabase and return them in the local squad shape.
+ * Returns null when Supabase is not configured.
+ */
+export const fetchAllSquadsFromSupabase = async () => {
+  if (!checkSupabase()) return null;
+  try {
+    const { data, error } = await supabase
+      .from('squads')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id:         row.id,
+      code:       row.code,
+      name:       row.name,
+      emoji:      row.emoji,
+      leaderId:   row.leader_id,
+      members:    row.members || [],
+      goals:      row.goals || [],
+      challenges: row.challenges || [],
+      createdAt:  row.created_at,
+    }));
+  } catch (err) {
+    console.error('[fetchAllSquadsFromSupabase]', err);
+    return null;
+  }
+};
+
+/**
+ * Fetch a single squad by its invite code from Supabase (case-insensitive).
+ * Returns null if not found or on error.
+ */
+export const fetchSquadByCodeFromSupabase = async (code) => {
+  if (!checkSupabase() || !code) return null;
+  try {
+    const { data, error } = await supabase
+      .from('squads')
+      .select('*')
+      .ilike('code', code.trim())
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id:         data.id,
+      code:       data.code,
+      name:       data.name,
+      emoji:      data.emoji,
+      leaderId:   data.leader_id,
+      members:    data.members || [],
+      goals:      data.goals || [],
+      challenges: data.challenges || [],
+      createdAt:  data.created_at,
+    };
+  } catch (err) {
+    console.error('[fetchSquadByCodeFromSupabase]', err);
+    return null;
+  }
+};
+
+/**
+ * Delete a squad from Supabase by ID.
+ */
+export const deleteSquadFromSupabase = async (squadId) => {
+  if (!checkSupabase() || !squadId) return false;
+  try {
+    const { error } = await supabase.from('squads').delete().eq('id', squadId);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[deleteSquadFromSupabase]', err);
+    return false;
+  }
+};
+// SQUAD INVITATIONS
+// ---------------------------------------------------------------------------
+
+/**
+ * Send a squad invitation to a user.
+ * Inserts into squad_invitations and fires an in-app notification.
+ *
+ * @param {{ squadId, squadName, squadEmoji, senderId, receiverId }} param
+ * @returns {boolean}
+ */
+export const sendSquadInvite = async ({ squadId, squadName, squadEmoji, senderId, receiverId }) => {
+  if (!checkSupabase()) return false;
+  if (!squadId || !senderId || !receiverId) return false;
+  if (senderId === receiverId) return false;
+
+  try {
+    // Prevent duplicate pending invite
+    const { data: existing } = await supabase
+      .from('squad_invitations')
+      .select('id, status')
+      .match({ squad_id: squadId, receiver_id: receiverId })
+      .maybeSingle();
+
+    if (existing && existing.status === 'pending') {
+      console.warn('[sendSquadInvite] Invite already pending for this user.');
+      return false;
+    }
+
+    // Upsert (re-send if previously declined/expired)
+    const { error } = await supabase
+      .from('squad_invitations')
+      .upsert({
+        squad_id:    squadId,
+        squad_name:  squadName,
+        squad_emoji: squadEmoji || '💪',
+        sender_id:   senderId,
+        receiver_id: receiverId,
+        status:      'pending',
+        created_at:  new Date().toISOString(),
+      }, { onConflict: 'squad_id,receiver_id' });
+
+    if (error) throw error;
+
+    // Fire in-app notification
+    await supabase.from('notifications').insert({
+      receiver_id: receiverId,
+      sender_id:   senderId,
+      type:        'squad_invite',
+      post_id:     null,
+      comment_id:  null,
+      extra_data:  JSON.stringify({ squadId, squadName, squadEmoji }),
+    });
+
+    console.log('[sendSquadInvite] Invite sent to', receiverId, 'for squad', squadName);
+    return true;
+  } catch (err) {
+    console.error('[sendSquadInvite]', err);
+    return false;
+  }
+};
+
+/**
+ * Fetch all pending squad invitations for a user.
+ * @param {string} userId
+ * @returns {Array}
+ */
+export const fetchSquadInvitations = async (userId) => {
+  if (!checkSupabase()) return [];
+  try {
+    const { data, error } = await supabase
+      .from('squad_invitations')
+      .select(`
+        *,
+        sender:profiles!squad_invitations_sender_id_fkey (id, username, display_name, photo)
+      `)
+      .eq('receiver_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[fetchSquadInvitations]', err);
+    return [];
+  }
+};
+
+/**
+ * Accept or decline a squad invitation.
+ * @param {string} inviteId
+ * @param {'accepted'|'declined'} status
+ * @returns {boolean}
+ */
+export const respondSquadInvitation = async (inviteId, status) => {
+  if (!checkSupabase()) return false;
+  try {
+    const { error } = await supabase
+      .from('squad_invitations')
+      .update({ status, responded_at: new Date().toISOString() })
+      .eq('id', inviteId);
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[respondSquadInvitation]', err);
+    return false;
+  }
+};
+
+/**
+ * Check which users from a list already have a pending invite to a squad.
+ * Returns a Set of receiver_id strings.
+ * @param {string} squadId
+ * @param {string[]} userIds
+ * @returns {Set<string>}
+ */
+export const getPendingInvitesForSquad = async (squadId, userIds) => {
+  if (!checkSupabase() || !userIds.length) return new Set();
+  try {
+    const { data } = await supabase
+      .from('squad_invitations')
+      .select('receiver_id')
+      .eq('squad_id', squadId)
+      .eq('status', 'pending')
+      .in('receiver_id', userIds);
+
+    return new Set((data || []).map(r => r.receiver_id));
+  } catch {
+    return new Set();
+  }
+};
 
 const METRIC_COLUMN_MAP = {
   points: 'reward_points',
@@ -1074,13 +1616,33 @@ const METRIC_COLUMN_MAP = {
  * Global / Weekly / Monthly leaderboard.
  */
 export const getLeaderboardData = async (metric = 'points', period = 'global') => {
-  if (!checkSupabase()) return [];
+  const localFallback = () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return [];
+    const history = getWorkoutHistory();
+    const streakInfo = calculateStreaks(history);
+    const calories = history.reduce((sum, s) => sum + (s.caloriesBurned ?? 0), 0);
+    return [{
+      id: currentUser.id,
+      username: currentUser.username || (currentUser.name || 'athlete').toLowerCase().replace(/[^a-z0-9]/g, ''),
+      display_name: currentUser.name || 'Athlete',
+      photo: currentUser.photo || '',
+      reward_points: getUserPoints(),
+      calories_burned: Math.round(calories * 10) / 10,
+      total_workouts: history.length,
+      current_streak: streakInfo.currentStreak,
+      updated_at: new Date().toISOString(),
+    }];
+  };
+
+  if (!checkSupabase()) return localFallback();
+
   try {
     const orderCol = METRIC_COLUMN_MAP[metric] || 'reward_points';
 
     let query = supabase
       .from('profiles')
-      .select('*')
+      .select('id, username, display_name, photo, reward_points, calories_burned, total_workouts, current_streak, updated_at')
       .order(orderCol, { ascending: false })
       .limit(50);
 
@@ -1095,12 +1657,12 @@ export const getLeaderboardData = async (metric = 'points', period = 'global') =
       query = query.gt('updated_at', cutoff.toISOString());
     }
 
-    const { data, error } = await query;
+    const { data, error } = await withTimeout(query, 3500);
     if (error) throw error;
-    return data || [];
+    return (data && data.length > 0) ? data : localFallback();
   } catch (err) {
-    console.error('[getLeaderboardData]', err);
-    return [];
+    console.warn('[getLeaderboardData] Using local leaderboard:', err.message);
+    return localFallback();
   }
 };
 

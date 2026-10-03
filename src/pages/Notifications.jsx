@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Heart, MessageSquare, UserPlus, UserCheck, Eye, CheckCheck, User, Trash2, X, Check } from 'lucide-react';
+import { Bell, Heart, MessageSquare, UserPlus, UserCheck, Eye, CheckCheck, User, Trash2, X, Check, Shield } from 'lucide-react';
 import { getCurrentUser } from '../utils/auth';
 import { 
   fetchNotifications, 
@@ -10,8 +10,11 @@ import {
   rejectFriendRequest,
   getFriendRequestStatus,
   deleteNotification,
-  deleteAllNotifications
+  deleteAllNotifications,
+  fetchSquadInvitations,
+  respondSquadInvitation,
 } from '../utils/supabaseBridge';
+import { joinSquadByCode } from '../utils/squadStorage';
 import { supabase } from '../utils/supabaseClient';
 import SkeletonLoader from '../components/SkeletonLoader';
 import { useToast } from '../components/Toast';
@@ -150,39 +153,84 @@ const Notifications = () => {
     }
   };
 
-  const getNotificationText = (type) => {
+  // ── Squad invite handlers ──
+  const handleAcceptSquadInvite = async (notif) => {
+    try {
+      const extra = notif.extra_data ? JSON.parse(notif.extra_data) : {};
+      const squadId = extra.squadId;
+      if (!squadId) { addToast('Invalid invite data.', 'error'); return; }
+
+      // Find pending invite row
+      const invites = await fetchSquadInvitations(currentUser.id);
+      const invite  = invites.find(i => i.squad_id === squadId && i.status === 'pending');
+      if (!invite) { addToast('Invite not found or already responded.', 'warning'); return; }
+
+      const ok = await respondSquadInvitation(invite.id, 'accepted');
+      if (!ok) { addToast('Failed to accept invite.', 'error'); return; }
+
+      // Join the squad locally
+      const result = joinSquadByCode(squadId, currentUser.id, currentUser.name || 'Athlete');
+      if (result.success) {
+        addToast(`🎉 Joined "${extra.squadName || 'squad'}" successfully!`, 'success');
+      } else if (result.error !== "You're already in this squad.") {
+        addToast(`Joined (already a member).`, 'info');
+      }
+
+      await deleteNotification(notif.id);
+      setNotifications(prev => prev.filter(n => n.id !== notif.id));
+    } catch (err) {
+      console.error('[handleAcceptSquadInvite]', err);
+      addToast('Failed to accept squad invite.', 'error');
+    }
+  };
+
+  const handleDeclineSquadInvite = async (notif) => {
+    try {
+      const extra = notif.extra_data ? JSON.parse(notif.extra_data) : {};
+      const squadId = extra.squadId;
+      if (squadId) {
+        const invites = await fetchSquadInvitations(currentUser.id);
+        const invite  = invites.find(i => i.squad_id === squadId && i.status === 'pending');
+        if (invite) await respondSquadInvitation(invite.id, 'declined');
+      }
+      await deleteNotification(notif.id);
+      setNotifications(prev => prev.filter(n => n.id !== notif.id));
+      addToast('Squad invite declined.', 'info');
+    } catch (err) {
+      console.error('[handleDeclineSquadInvite]', err);
+    }
+  };
+
+  const getNotificationText = (notif) => {
+    const type = notif.type;
+    if (type === 'squad_invite') {
+      try {
+        const extra = notif.extra_data ? JSON.parse(notif.extra_data) : {};
+        return `invited you to join ${extra.squadEmoji || '💪'} ${extra.squadName || 'a squad'}.`;
+      } catch {
+        return 'invited you to join a squad.';
+      }
+    }
     switch (type) {
-      case 'follow':
-        return 'started following you.';
-      case 'friend_request':
-        return 'sent you a friend request.';
-      case 'friend_accept':
-        return 'accepted your friend request.';
-      case 'like':
-        return 'liked your workout post.';
-      case 'comment':
-        return 'commented on your post.';
-      case 'mention':
-        return 'mentioned you in a post.';
-      default:
-        return 'interacted with your profile.';
+      case 'follow':        return 'started following you.';
+      case 'friend_request':return 'sent you a friend request.';
+      case 'friend_accept': return 'accepted your friend request.';
+      case 'like':          return 'liked your workout post.';
+      case 'comment':       return 'commented on your post.';
+      case 'mention':       return 'mentioned you in a post.';
+      default:              return 'interacted with your profile.';
     }
   };
 
   const getNotificationIcon = (type) => {
     switch (type) {
-      case 'follow':
-        return <UserCheck className="w-4 h-4 text-sky-400" />;
-      case 'friend_request':
-        return <UserPlus className="w-4 h-4 text-indigo-400" />;
-      case 'friend_accept':
-        return <UserCheck className="w-4 h-4 text-emerald-400" />;
-      case 'like':
-        return <Heart className="w-4 h-4 text-red-500 fill-red-500" />;
-      case 'comment':
-        return <MessageSquare className="w-4 h-4 text-brand-orange" />;
-      default:
-        return <Bell className="w-4 h-4 text-slate-400" />;
+      case 'follow':        return <UserCheck  className="w-4 h-4 text-sky-400" />;
+      case 'friend_request':return <UserPlus   className="w-4 h-4 text-indigo-400" />;
+      case 'friend_accept': return <UserCheck  className="w-4 h-4 text-emerald-400" />;
+      case 'like':          return <Heart      className="w-4 h-4 text-red-500 fill-red-500" />;
+      case 'comment':       return <MessageSquare className="w-4 h-4 text-brand-orange" />;
+      case 'squad_invite':  return <Shield     className="w-4 h-4 text-orange-400" />;
+      default:              return <Bell       className="w-4 h-4 text-slate-400" />;
     }
   };
 
@@ -247,7 +295,7 @@ const Notifications = () => {
                 <div>
                   <p className="text-xs leading-relaxed text-slate-200">
                     <span className="font-extrabold text-white">{notif.sender?.display_name || 'An athlete'}</span>{' '}
-                    {getNotificationText(notif.type)}
+                    {getNotificationText(notif)}
                   </p>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5 font-bold">
                     {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -271,6 +319,23 @@ const Notifications = () => {
                       className="flex items-center gap-1.5 px-3 py-2 bg-brand-orange hover:bg-[#ff8f4d] text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
                     >
                       <Check className="w-4 h-4" /> Accept
+                    </button>
+                  </>
+                )}
+                {notif.type === 'squad_invite' && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeclineSquadInvite(notif); }}
+                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all"
+                      title="Decline invite"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleAcceptSquadInvite(notif); }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-brand-orange hover:bg-[#ff8f4d] text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+                    >
+                      <Shield className="w-4 h-4" /> Join
                     </button>
                   </>
                 )}

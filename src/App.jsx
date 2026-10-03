@@ -1,9 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import FloatingChatButton from './components/FloatingChatButton';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ThemeProvider } from './context/ThemeContext';
+
+// ── Sidebar context ───────────────────────────────────────────────────────────
+export const SidebarContext = createContext({ collapsed: false, setCollapsed: () => {} });
 
 // ── Core pages ────────────────────────────────────────────────────────────────
 import Home          from './pages/Home';
@@ -40,6 +43,24 @@ const PROTECTED = ({ children, requireRole }) => (
 );
 
 function App() {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('fittrack_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleSetCollapsed = (val) => {
+    setCollapsed(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('fittrack_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // ── On cold start: seed default admin and restore session for any user already logged in 
   useEffect(() => {
     seedDefaultAdmin();
@@ -68,72 +89,75 @@ function App() {
 
   return (
     <ThemeProvider>
-      <Router>
-        <div className="min-h-screen font-sans">
-          <Navbar />
+      <SidebarContext.Provider value={{ collapsed, setCollapsed: handleSetCollapsed }}>
+        <Router>
+          <div className="min-h-screen font-sans">
+            <Navbar />
 
-          <Routes>
-          {/* ── Public routes ── */}
-          <Route path="/auth"                   element={<Auth />} />
+            {/* Sidebar offset: w-56 normal, 0 for full screen when closed */}
+            <div className={`transition-all duration-300 ${collapsed ? 'md:pl-0' : 'md:pl-56'}`}>
+              <Routes>
+              {/* ── Public routes ── */}
+              <Route path="/auth"                   element={<Auth />} />
 
-          {/* ── User protected routes ── */}
-          <Route path="/"                       element={<PROTECTED requireRole="USER"><Home /></PROTECTED>} />
-          <Route path="/guide"                  element={<PROTECTED requireRole="USER"><FitnessGuide /></PROTECTED>} />
-          <Route path="/history"                element={<PROTECTED requireRole="USER"><History /></PROTECTED>} />
+              {/* ── User protected routes ── */}
+              <Route path="/"                       element={<PROTECTED requireRole="USER"><Home /></PROTECTED>} />
+              <Route path="/guide"                  element={<PROTECTED requireRole="USER"><FitnessGuide /></PROTECTED>} />
+              <Route path="/history"                element={<PROTECTED requireRole="USER"><History /></PROTECTED>} />
 
-          {/* ── Workout flow (requires user auth) ── */}
-          <Route path="/instructions/:type"     element={<PROTECTED requireRole="USER"><Instructions /></PROTECTED>} />
-          <Route path="/workout/:type"          element={<PROTECTED requireRole="USER"><Workout /></PROTECTED>} />
+              {/* ── Workout flow ── */}
+              <Route path="/instructions/:type"     element={<PROTECTED requireRole="USER"><Instructions /></PROTECTED>} />
+              <Route path="/workout/:type"          element={<PROTECTED requireRole="USER"><Workout /></PROTECTED>} />
 
-          {/* ── Protected: requires sign-in ── */}
-          <Route path="/dashboard"              element={<PROTECTED requireRole="USER"><Dashboard /></PROTECTED>} />
-          <Route path="/chat"                   element={<PROTECTED requireRole="USER"><Chatbot /></PROTECTED>} />
-          <Route path="/profile"                element={<PROTECTED requireRole="USER"><Profile /></PROTECTED>} />
+              {/* ── Protected: requires sign-in ── */}
+              <Route path="/dashboard"              element={<PROTECTED requireRole="USER"><Dashboard /></PROTECTED>} />
+              <Route path="/chat"                   element={<PROTECTED requireRole="USER"><Chatbot /></PROTECTED>} />
+              <Route path="/profile"                element={<PROTECTED requireRole="USER"><Profile /></PROTECTED>} />
 
-          {/* ── Social hub ── */}
-          <Route path="/social"                 element={<PROTECTED requireRole="USER"><Social /></PROTECTED>} />
+              {/* ── Social hub ── */}
+              <Route path="/social"                 element={<PROTECTED requireRole="USER"><Social /></PROTECTED>} />
 
-          {/* ── Social: individual routes redirect into the hub ── */}
-          <Route path="/feed"                   element={<Navigate to="/social?tab=feed"          replace />} />
-          <Route path="/search"                 element={<Navigate to="/social?tab=search"        replace />} />
-          <Route path="/messages"               element={<Navigate to="/social?tab=messages"      replace />} />
-          <Route path="/notifications"          element={<Navigate to="/social?tab=notifications" replace />} />
-          <Route path="/saved"                  element={<Navigate to="/social?tab=saved"         replace />} />
+              {/* ── Social: individual routes redirect into hub ── */}
+              <Route path="/feed"                   element={<Navigate to="/social?tab=feed"          replace />} />
+              <Route path="/search"                 element={<Navigate to="/social?tab=search"        replace />} />
+              <Route path="/messages"               element={<Navigate to="/social?tab=messages"      replace />} />
+              <Route path="/notifications"          element={<Navigate to="/social?tab=notifications" replace />} />
+              <Route path="/saved"                  element={<Navigate to="/social?tab=saved"         replace />} />
 
-          {/* ── Leaderboard (standalone) ── */}
-          <Route path="/leaderboard"            element={<PROTECTED requireRole="USER"><Leaderboard /></PROTECTED>} />
+              {/* ── Leaderboard ── */}
+              <Route path="/leaderboard"            element={<PROTECTED requireRole="USER"><Leaderboard /></PROTECTED>} />
 
-          {/* ── Goal Tracker ── */}
-          <Route path="/goals"                  element={<PROTECTED requireRole="USER"><Goals /></PROTECTED>} />
+              {/* ── Goals ── */}
+              <Route path="/goals"                  element={<PROTECTED requireRole="USER"><Goals /></PROTECTED>} />
 
-          {/* ── AI Nutrition Planner (PRO) ── */}
-          <Route path="/nutrition"              element={<PROTECTED requireRole="USER"><NutritionPlanner /></PROTECTED>} />
+              {/* ── AI Nutrition Planner (PRO) ── */}
+              <Route path="/nutrition"              element={<PROTECTED requireRole="USER"><NutritionPlanner /></PROTECTED>} />
 
-          {/* ── Squad System (PRO) ── */}
-          <Route path="/squads"                element={<PROTECTED requireRole="USER"><Squads /></PROTECTED>} />
+              {/* ── Squads (PRO) ── */}
+              <Route path="/squads"                 element={<Navigate to="/social?tab=squads" replace />} />
 
-          {/* ── Public profiles ── */}
-          {/* Primary route used by all internal links */}
-          <Route path="/user/:id"               element={<PROTECTED requireRole="USER"><PublicProfile /></PROTECTED>} />
-          {/* Alias so /profile/:id also works */}
-          <Route path="/profile/:id"            element={<PROTECTED requireRole="USER"><PublicProfile /></PROTECTED>} />
+              {/* ── Public profiles ── */}
+              <Route path="/user/:id"               element={<PROTECTED requireRole="USER"><PublicProfile /></PROTECTED>} />
+              <Route path="/profile/:id"            element={<PROTECTED requireRole="USER"><PublicProfile /></PROTECTED>} />
 
-          {/* ── Admin protected dashboard ── */}
-          <Route path="/admin"                  element={<PROTECTED requireRole="ADMIN"><AdminDashboard /></PROTECTED>} />
+              {/* ── Admin ── */}
+              <Route path="/admin"                  element={<PROTECTED requireRole="ADMIN"><AdminDashboard /></PROTECTED>} />
 
-          {/* ── Legacy / convenience aliases ── */}
-          <Route path="/saved-posts"            element={<Navigate to="/saved" replace />} />
-          <Route path="/friends"                element={<Navigate to="/search" replace />} />
-          <Route path="/stories"                element={<Navigate to="/feed"   replace />} />
-          <Route path="/settings"               element={<Navigate to="/profile" replace />} />
+              {/* ── Aliases ── */}
+              <Route path="/saved-posts"            element={<Navigate to="/saved"   replace />} />
+              <Route path="/friends"                element={<Navigate to="/search"  replace />} />
+              <Route path="/stories"                element={<Navigate to="/feed"    replace />} />
+              <Route path="/settings"               element={<Navigate to="/profile" replace />} />
 
-          {/* ── 404 fallback ── */}
-          <Route path="*"                       element={<Navigate to="/" replace />} />
-        </Routes>
+              {/* ── 404 ── */}
+              <Route path="*"                       element={<Navigate to="/" replace />} />
+            </Routes>
 
-        <FloatingChatButton />
-      </div>
-      </Router>
+              <FloatingChatButton />
+            </div>
+          </div>
+        </Router>
+      </SidebarContext.Provider>
     </ThemeProvider>
   );
 }

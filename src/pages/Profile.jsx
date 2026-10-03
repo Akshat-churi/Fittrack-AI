@@ -121,15 +121,29 @@ const Profile = () => {
     if (!file) return;
 
     setUploadingPhoto(true);
-    const publicUrl = await uploadProfilePhoto(user.id, file);
+
+    // Try Supabase storage first
+    let publicUrl = await uploadProfilePhoto(user.id, file);
+
+    // Fallback: convert to base64 and store locally
+    if (!publicUrl) {
+      publicUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
     setUploadingPhoto(false);
 
     if (publicUrl) {
       setSaved(false);
-      setForm((currentForm) => ({ ...currentForm, photo: publicUrl }));
-      addToast('Profile photo uploaded!', 'success');
+      setForm((f) => ({ ...f, photo: publicUrl }));
+      const updated = updateCurrentUser({ photo: publicUrl });
+      setUser(updated);
+      addToast('Profile photo updated!', 'success');
     } else {
-      addToast('Failed to upload profile photo.', 'error');
+      addToast('Failed to update profile photo.', 'error');
     }
   };
 
@@ -138,15 +152,29 @@ const Profile = () => {
     if (!file) return;
 
     setUploadingCover(true);
-    const publicUrl = await uploadCoverPhoto(user.id, file);
+
+    // Try Supabase storage first
+    let publicUrl = await uploadCoverPhoto(user.id, file);
+
+    // Fallback: convert to base64 and store locally
+    if (!publicUrl) {
+      publicUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
     setUploadingCover(false);
 
     if (publicUrl) {
       setSaved(false);
-      setForm((currentForm) => ({ ...currentForm, coverPhoto: publicUrl }));
-      addToast('Cover photo uploaded!', 'success');
+      setForm((f) => ({ ...f, coverPhoto: publicUrl }));
+      const updated = updateCurrentUser({ coverPhoto: publicUrl });
+      setUser(updated);
+      addToast('Cover photo updated!', 'success');
     } else {
-      addToast('Failed to upload cover photo.', 'error');
+      addToast('Failed to update cover photo.', 'error');
     }
   };
 
@@ -173,26 +201,23 @@ const Profile = () => {
     };
 
     // Update Local auth user profile
-    const updatedUser = updateCurrentUser(payload);
+    const updatedUser = updateCurrentUser({ ...payload, photo: form.photo, coverPhoto: form.coverPhoto });
     setUser(updatedUser);
 
-    // Sync to Supabase
-    const dbSuccess = await updateSupabaseProfile(user.id, {
+    // Sync to Supabase (best-effort — don't block or show error if it fails)
+    updateSupabaseProfile(user.id, {
       username: cleanUsername,
       display_name: form.name,
       photo: form.photo,
       cover_photo: form.coverPhoto,
       bio: form.bio,
       fitness_goal: form.fitnessGoal,
-    });
+    }).then(ok => {
+      if (ok) syncProfile(updatedUser);
+    }).catch(() => {});
 
-    if (dbSuccess) {
-      await syncProfile(updatedUser);
-      setSaved(true);
-      addToast('Profile updated successfully!', 'success');
-    } else {
-      addToast('Failed to sync changes with Supabase.', 'error');
-    }
+    setSaved(true);
+    addToast('Profile updated successfully!', 'success');
   };
 
   const handleSignOut = () => {

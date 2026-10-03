@@ -362,3 +362,62 @@ BEGIN
   DELETE FROM public.stories WHERE expires_at < NOW();
 END;
 $$;
+
+-- ============================================================================
+-- 14. SQUADS Table
+-- Stores squad data so all users across all devices share the same squads.
+-- members / goals / challenges stored as JSONB blobs.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.squads (
+  id          TEXT PRIMARY KEY,
+  code        TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  emoji       TEXT NOT NULL DEFAULT '💪',
+  leader_id   TEXT NOT NULL,
+  members     JSONB NOT NULL DEFAULT '[]',
+  goals       JSONB NOT NULL DEFAULT '[]',
+  challenges  JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS squads_code_idx ON public.squads (UPPER(code));
+
+ALTER TABLE public.squads ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "squads_select" ON public.squads FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "squads_insert" ON public.squads FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "squads_update" ON public.squads FOR UPDATE TO anon, authenticated USING (true);
+CREATE POLICY "squads_delete" ON public.squads FOR DELETE TO anon, authenticated USING (true);
+
+-- Add squads to realtime publication so member lists update live
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.squads;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+END $$;
+
+-- ============================================================================
+-- 15. SQUAD INVITATIONS Table (if not already created)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.squad_invitations (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  squad_id    TEXT NOT NULL,
+  squad_name  TEXT NOT NULL DEFAULT '',
+  squad_emoji TEXT NOT NULL DEFAULT '💪',
+  sender_id   TEXT NOT NULL,
+  receiver_id TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  responded_at TIMESTAMPTZ,
+  UNIQUE (squad_id, receiver_id)
+);
+
+ALTER TABLE public.squad_invitations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "squad_inv_select" ON public.squad_invitations FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "squad_inv_insert" ON public.squad_invitations FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "squad_inv_update" ON public.squad_invitations FOR UPDATE TO anon, authenticated USING (true);
+CREATE POLICY "squad_inv_delete" ON public.squad_invitations FOR DELETE TO anon, authenticated USING (true);

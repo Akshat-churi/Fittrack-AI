@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Globe, Search, MessageSquare, Bookmark, Bell } from 'lucide-react';
+import { Globe, Search, MessageSquare, Bookmark, Bell, Users } from 'lucide-react';
 import SocialFeed    from './SocialFeed';
 import SearchUsers   from './SearchUsers';
 import Messages      from './Messages';
 import SavedPosts    from './SavedPosts';
 import Notifications from './Notifications';
+import Squads        from './Squads';
 import { getCurrentUser } from '../utils/auth';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 
 const TABS = [
   { id: 'feed',          label: 'Feed',    icon: Globe },
+  { id: 'squads',        label: 'Squads',  icon: Users },
   { id: 'search',        label: 'Search',  icon: Search },
   { id: 'messages',      label: 'Chat',    icon: MessageSquare },
   { id: 'saved',         label: 'Saved',   icon: Bookmark },
@@ -79,34 +81,31 @@ export default function Social() {
   ) : null;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col">
+    <div className="min-h-screen flex flex-col">
 
       {/* ── Sticky Tab Bar ─────────────────────────────────────────────── */}
-      <div className="sticky top-16 z-30 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800/60">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-stretch overflow-x-auto scrollbar-hide">
+      <div className="sticky top-14 md:top-0 z-30 border-b border-zinc-800/60"
+        style={{ backgroundColor: 'var(--glass-bg)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}>
+        <div className="max-w-6xl mx-auto px-3 sm:px-4">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-2">
             {TABS.map(({ id, label, icon: Icon }) => {
-              const isActive = activeTab === id;
+              const active = activeTab === id;
               const badge = id === 'notifications' ? unreadNotifs : id === 'messages' ? unreadMsgs : 0;
-
               return (
                 <button
                   key={id}
                   onClick={() => switchTab(id)}
-                  className={`relative flex items-center gap-2 px-5 py-4 text-sm font-bold whitespace-nowrap transition-all border-b-2 shrink-0 ${
-                    isActive
-                      ? 'text-brand-orange border-brand-orange'
-                      : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
-                  }`}
+                  className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0
+                    ${active
+                      ? 'bg-brand-orange/15 text-brand-orange border border-brand-orange/25'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 border border-transparent'
+                    }`}
                 >
-                  <span className="relative">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-brand-orange' : ''}`} />
-                    <Badge n={badge} />
+                  <span className="relative shrink-0">
+                    <Icon className="w-3.5 h-3.5"/>
+                    <Badge n={badge}/>
                   </span>
                   <span>{label}</span>
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-brand-orange/0 via-brand-orange to-brand-orange/0 rounded-full" />
-                  )}
                 </button>
               );
             })}
@@ -117,6 +116,7 @@ export default function Social() {
       {/* ── Tab Content ────────────────────────────────────────────────── */}
       <div className="flex-1">
         {activeTab === 'feed'          && <SocialFeed />}
+        {activeTab === 'squads'        && <Squads />}
         {activeTab === 'search'        && <SearchUsers />}
         {activeTab === 'messages'      && <Messages />}
         {activeTab === 'saved'         && <SavedPosts />}

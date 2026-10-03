@@ -73,6 +73,14 @@ export const getUserById = (userId) => {
   return user ? withDefaults({ ...user, password: undefined }) : null;
 };
 
+/**
+ * Get all registered users (used for squad invites).
+ * @returns {Array<object>}
+ */
+export const getAllUsers = () => {
+  return readUsers().map(u => withDefaults({ ...u, password: undefined }));
+};
+
 // ─── Role helpers ──────────────────────────────────────────────────────────
 
 /**

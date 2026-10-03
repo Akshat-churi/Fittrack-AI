@@ -13,11 +13,38 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
   const poseRef = useRef(null);
   const cameraRef = useRef(null);
   const animationFrameId = useRef(null);
+  const isVideoFileMode = useRef(false);
+
+  // Sync canvas dimensions with video dimensions
+  const syncCanvasToVideo = useRef(() => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        console.log("Canvas synced to video dimensions:", canvas.width, "x", canvas.height);
+      }
+    }
+  });
 
   useEffect(() => {
     let active = true;
 
     if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    // Add listener to sync canvas when video metadata loads
+    const handleMetadata = () => {
+      console.log("Video metadata loaded!");
+      syncCanvasToVideo.current();
+    };
+    video.addEventListener('loadedmetadata', handleMetadata);
+
+    // Also sync immediately in case metadata is already loaded
+    syncCanvasToVideo.current();
 
     poseRef.current = new Pose({
       locateFile: (file) => {
@@ -41,6 +68,8 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
       if (!active) return;
       if (!canvasRef.current || !videoRef.current) return;
 
+      console.log("Pose results received! Has landmarks:", !!results.poseLandmarks);
+
       const canvasCtx = canvasRef.current.getContext('2d');
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -57,6 +86,7 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
                       {color: '#FF0000', lineWidth: 2});
         
         if (onResults) {
+          console.log("Calling onResults with landmarks!");
           onResults(results.poseLandmarks);
         }
       }
@@ -66,34 +96,45 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
     // We only start the camera manually when requested, not immediately on mount
     return () => {
       active = false;
+      video.removeEventListener('loadedmetadata', handleMetadata);
       if (cameraRef.current) {
         cameraRef.current.stop();
+      }
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
       }
       if (poseRef.current) {
         poseRef.current.close();
       }
     };
-  }, [videoRef, canvasRef]);
+  }, [videoRef, canvasRef, onResults]);
 
   const startCamera = async () => {
+    isVideoFileMode.current = false;
     if (videoRef.current && poseRef.current) {
       try {
         // Pre-initialize the model so it doesn't block on the first frame
         await poseRef.current.initialize();
-        
+
+        // Use lower resolution on mobile for better performance
+        const isMobile = window.innerWidth <= 768;
+        const camW = isMobile ? 640 : 1280;
+        const camH = isMobile ? 480 : 720;
+
         cameraRef.current = new Camera(videoRef.current, {
           onFrame: async () => {
-            if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA
+            if (videoRef.current && videoRef.current.readyState >= 2) {
               try {
+                syncCanvasToVideo.current();
                 await poseRef.current.send({ image: videoRef.current });
               } catch (error) {
-                console.error("Error in pose.send:", error);
+                console.error("Error in pose.send (camera):", error);
                 setErrorMsg(`Pose error: ${error.message}`);
               }
             }
           },
-          width: 1280,
-          height: 720
+          width: camW,
+          height: camH,
         });
         await cameraRef.current.start();
         setIsLoaded(true);
@@ -105,6 +146,7 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
   };
 
   const startVideoFile = async (videoEl) => {
+    isVideoFileMode.current = true;
     if (poseRef.current && videoEl) {
       try {
         await poseRef.current.initialize();
@@ -113,9 +155,11 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
         const processFrame = async () => {
           if (!videoEl.paused && !videoEl.ended) {
             try {
+              // Sync canvas before processing each frame
+              syncCanvasToVideo.current();
               await poseRef.current.send({ image: videoEl });
             } catch (error) {
-              console.error("Error in pose.send:", error);
+              console.error("Error in pose.send (video file):", error);
               setErrorMsg(`Pose error: ${error.message}`);
             }
           }
@@ -124,11 +168,23 @@ export const usePoseDetection = ({ videoRef, canvasRef, onResults }) => {
           }
         };
 
-        // Start processing once the video plays
-        videoEl.onplay = () => {
-           processFrame();
+        // Start processing immediately and when video plays
+        const startProcessing = () => {
+          console.log("Starting video file processing!");
+          processFrame();
         };
-        videoEl.play();
+
+        if (videoEl.readyState >= 1) { // HAVE_METADATA or better
+          startProcessing();
+        } else {
+          videoEl.addEventListener('loadedmetadata', startProcessing, { once: true });
+        }
+        videoEl.onplay = startProcessing;
+        
+        // If video is already playing, start right away
+        if (!videoEl.paused && !videoEl.ended) {
+          startProcessing();
+        }
       } catch (error) {
         console.error("Failed to start video or initialize pose:", error);
         setErrorMsg(`Init error: ${error.message}`);

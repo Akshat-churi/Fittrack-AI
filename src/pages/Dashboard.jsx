@@ -92,7 +92,7 @@ export default function Dashboard() {
   const R = 44, C = 2 * Math.PI * R;
 
   const tiles = [
-    { title: 'Workouts', value: stats.totalWorkouts,    icon: Layers,   accent: 'border-accent-blue/20',    sub: `in this ${period}` },
+    { title: 'Workouts', value: stats.totalWorkouts,    icon: Layers,   accent: 'border-accent-blue/20',    sub: stats.periodLabel },
     { title: 'Reps',     value: stats.totalReps,        icon: Activity, accent: 'border-brand-orange/20',   sub: 'total repetitions' },
     { title: 'Calories', value: `${stats.totalCalories}`, icon: Flame, accent: 'border-red-500/20',        sub: 'kcal burned' },
     { title: 'Duration', value: stats.totalDurationStr, icon: Clock,    accent: 'border-emerald-500/20',    sub: 'active time' },
@@ -110,10 +110,10 @@ export default function Dashboard() {
             <h1 className="section-title">Progress <span className="text-gradient">Dashboard</span></h1>
             <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mt-1">Your performance analytics</p>
           </div>
-          <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 self-start sm:self-auto">
+          <div className="flex bg-zinc-900/80 border border-zinc-800 rounded-2xl p-1 self-start sm:self-auto gap-0.5">
             {PERIODS.map(p => (
               <button key={p.id} onClick={() => setPeriod(p.id)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${period === p.id ? 'bg-brand-orange text-white shadow' : 'text-zinc-400 hover:text-white'}`}>
+                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${period === p.id ? 'bg-brand-orange text-white shadow-md shadow-brand-orange/20' : 'text-zinc-500 hover:text-zinc-300'}`}>
                 {p.label}
               </button>
             ))}
@@ -253,7 +253,7 @@ export default function Dashboard() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-zinc-800/60 bg-zinc-900/40">
-                    {['Exercise', 'Reps', 'Duration', 'Calories', 'Points'].map(h => (
+                    {['Date', 'Exercise', 'Reps', 'Duration', 'Calories', 'Points'].map(h => (
                       <th key={h} className="py-3 px-4 text-[9px] font-black text-zinc-600 uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
@@ -261,6 +261,10 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-zinc-800/30">
                   {history.slice(0, 5).map((s, i) => (
                     <tr key={i} className="hover:bg-zinc-800/20 transition-colors">
+                      <td className="py-3 px-4 text-xs text-zinc-500 whitespace-nowrap">
+                        <span className="font-semibold text-zinc-300">{s.date ?? '—'}</span>
+                        {s.time && <span className="block text-[10px] text-zinc-600">{s.time}</span>}
+                      </td>
                       <td className="py-3 px-4 text-xs font-bold text-white">{s.exerciseType}</td>
                       <td className="py-3 px-4 text-xs text-zinc-400">{s.reps}</td>
                       <td className="py-3 px-4 text-xs text-zinc-400">{s.duration}</td>
