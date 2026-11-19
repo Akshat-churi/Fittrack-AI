@@ -82,8 +82,13 @@ const getBotResponse = (rawMessage) => {
     return `**Smart Snack Ideas** 🍎\n\nPre/post workout:\n• Banana + peanut butter 🍌\n• Rice cakes + almond butter\n• Whey shake + milk\n• Boiled eggs (2)\n\nLight snacks:\n• Greek yogurt (150g)\n• Handful of mixed nuts (30g) + fruit\n• Roasted chana / makhana\n• Carrot/cucumber sticks + hummus\n• Low-sugar protein bar\n\n🚫 Avoid: chips, biscuits, sugary drinks, processed snacks\n\n📌 Ideal snack: 150–250 kcal with at least 10–15g protein`;
   }
 
+  // ── Weight Gain & Bulking ───────────────────────────────────────────────────
+  if (match(msg, 'gain weight', 'weight gain', 'wait gain', 'gain my wait', 'gain wait', 'gain mass', 'bulking', 'bulk up', 'hard gainer', 'hardgainer', 'underweight', 'skinny', 'put on weight', 'increase weight')) {
+    return `**Healthy Weight Gain & Bulking Blueprint** 💪\n\nTo gain weight healthily without excess fat, you need a **controlled calorie surplus** combined with progressive strength training.\n\n1️⃣ **Calorie Surplus (The Foundation):**\n• Calculate your maintenance calories (TDEE) and add **300–500 kcal/day**\n• Aim for steady gain of **0.25–0.5 kg (0.5–1 lb) per week**\n• Eat 3 main meals + 2–3 calorie-dense snacks throughout the day\n\n2️⃣ **Macros & Protein Targets:**\n• **Protein**: 1.6–2.2g per kg bodyweight (chicken, eggs, paneer, lentils, whey, fish)\n• **Carbs**: 4–6g per kg (oats, rice, bananas, sweet potatoes, whole wheat)\n• **Healthy Fats**: 1–1.5g per kg (peanut butter, nuts, seeds, olive oil, curd)\n\n3️⃣ **High-Calorie Mass Shake (Easy ~650 kcal):**\n• 1 glass milk + 1 banana + 2 tbsp peanut butter + 40g oats + 1 scoop protein/paneer\n\n4️⃣ **Training for Muscle Mass:**\n• Focus on compound movements: squats, push-ups/bench press, pull-ups, rows\n• 4–5 workouts/week with progressive overload (increase weight/reps over time)\n• Keep cardio light (15–20 mins, 2x/week) so you don't burn off your surplus\n\n5️⃣ **Recovery:**\n• Sleep 8–9 hours nightly — muscle repairs and grows while you sleep!`;
+  }
+
   // ── Fat Loss ───────────────────────────────────────────────────────────────
-  if (match(msg, 'lose weight', 'fat loss', 'weight loss', 'lose fat', 'cut fat', 'slim', 'reduce weight')) {
+  if (match(msg, 'lose weight', 'fat loss', 'weight loss', 'lose fat', 'cut fat', 'slim', 'reduce weight', 'loose weight', 'lose wait', 'loose wait', 'burn fat', 'cut weight', 'shed weight')) {
     return `**Fat Loss Blueprint** 🔥\n\n1️⃣ **Nutrition (80% of results):**\n• Caloric deficit: -300 to -500 kcal/day\n• Protein: 1.8–2.2g/kg (prevents muscle loss)\n• Reduce sugar, alcohol, refined carbs\n• Eat more veggies (volume eating)\n\n2️⃣ **Training:**\n• Strength training 3–4x/week (preserves muscle)\n• Cardio 2–3x/week (HIIT or steady-state)\n• Stay active daily (7,000–10,000 steps)\n\n3️⃣ **Lifestyle:**\n• Sleep 7–9 hours (poor sleep = more cravings)\n• Manage stress (cortisol raises fat storage)\n• Drink 2.5–3L water daily\n• Track food intake — awareness is key!\n\n📊 Realistic goal: 0.5–1 kg fat loss per week`;
   }
 
@@ -197,6 +202,11 @@ const getBotResponse = (rawMessage) => {
     return `Stay strong and keep grinding! 💪🔥 Come back anytime you need fitness or nutrition advice. Goodbye and great training! 🏆`;
   }
 
+  // ── Unrelated / Off-Topic Inquiries (Strict Refusal) ─────────────────────
+  if (match(msg, 'code', 'coding', 'python', 'javascript', 'html', 'css', 'java', 'c++', 'react', 'sql', 'bug', 'github', 'crypto', 'bitcoin', 'stock market', 'finance', 'politics', 'election', 'president', 'movie', 'cinema', 'actor', 'song', 'lyrics', 'homework', 'capital of', 'weather', 'recipe for cake', 'gossip', 'essay', 'poem', 'write a story', 'translate', 'solve this math')) {
+    return `I'm **FitBot** 🤖 — your specialized AI fitness and nutrition coach!\n\nI can only assist with fitness, workouts, diet, nutrition, and health-related topics. I cannot answer questions about general knowledge, programming, or non-fitness subjects.\n\nHere are some things you can ask me:\n• 📈 *"I want to gain weight / build muscle"*\n• 🔥 *"How to lose body fat sustainably?"*\n• 🥗 *"Give me an Indian vegetarian high-protein diet"*\n• 💪 *"Beginner home workout routine with push-ups and squats"*`;
+  }
+
   // ── Default ───────────────────────────────────────────────────────────────
   return `That's a great question! I can help with:\n\n💪 **Workouts**: push-ups, squats, plans, exercises\n🥗 **Nutrition**: meals, macros, calorie targets\n🔥 **Goals**: fat loss, muscle gain, maintenance\n💊 **Supplements**: protein, creatine, vitamins\n😴 **Recovery**: sleep, soreness, rest days\n🧘 **Flexibility**: stretching, yoga, mobility\n\nTry asking something like:\n• *"What should I eat to lose fat?"*\n• *"Give me a beginner workout plan"*\n• *"How much protein do I need?"*\n• *"Best foods for muscle gain"*`;
 };
@@ -206,6 +216,7 @@ const getBotResponse = (rawMessage) => {
 ══════════════════════════════════════════════════════════════════════════════ */
 
 const QUICK_PROMPTS = [
+  { label: '📈 Weight gain plan',     text: 'I want to gain weight healthily. Give me a complete diet and workout plan' },
   { label: '🔥 Fat loss plan',        text: 'Give me a complete fat loss diet and workout plan' },
   { label: '💪 Build muscle',         text: 'How do I build muscle fast? Give me a meal and training plan' },
   { label: '🥗 Meal plan today',      text: 'Give me a full day healthy meal plan' },
@@ -241,33 +252,51 @@ const defaultMessages = () => ([{
 }]);
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   FORMAT BOT TEXT — render **bold** and line breaks
+   FORMAT BOT TEXT — render **bold**, headings, bullets and line breaks
 ══════════════════════════════════════════════════════════════════════════════ */
 
 const FormattedText = ({ text }) => {
-  // Split into lines, then render bold (**text**) inside each line
-  const renderLine = (line, lineIdx) => {
-    const parts = line.split(/\*\*(.+?)\*\*/g);
+  const lines = text.split('\n');
+
+  const renderFormattedLine = (line, idx) => {
+    const isHeading = line.startsWith('### ') || line.startsWith('## ') || line.startsWith('# ');
+    const cleanLine = isHeading ? line.replace(/^#{1,3}\s+/, '') : line;
+    const isBullet = /^\s*([*•-]|\d+\.)\s+/.test(cleanLine);
+    const parts = cleanLine.split(/\*\*(.+?)\*\*/g);
+
+    const formattedContent = parts.map((part, i) =>
+      i % 2 === 1 ? (
+        <strong key={i} className="font-extrabold text-white">
+          {part}
+        </strong>
+      ) : (
+        part
+      )
+    );
+
+    if (isHeading) {
+      return (
+        <div key={idx} className="font-extrabold text-brand-orange text-base mt-2 mb-1">
+          {formattedContent}
+        </div>
+      );
+    }
+
+    if (cleanLine.trim() === '---') {
+      return <hr key={idx} className="my-2 border-zinc-800" />;
+    }
+
     return (
-      <span key={lineIdx}>
-        {parts.map((p, i) =>
-          i % 2 === 1
-            ? <strong key={i} className="font-black text-white">{p}</strong>
-            : p
-        )}
-      </span>
+      <div key={idx} className={`${isBullet ? 'pl-2 my-0.5' : 'my-0.5'}`}>
+        {formattedContent}
+      </div>
     );
   };
 
   return (
-    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-      {text.split('\n').map((line, i, arr) => (
-        <React.Fragment key={i}>
-          {renderLine(line, i)}
-          {i < arr.length - 1 && <br />}
-        </React.Fragment>
-      ))}
-    </p>
+    <div className="text-sm leading-relaxed text-zinc-200">
+      {lines.map((line, idx) => renderFormattedLine(line, idx))}
+    </div>
   );
 };
 
@@ -319,70 +348,93 @@ const Chatbot = () => {
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-    // If no API key is set, fall back to local knowledge base
-    if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-      const delay = 700 + Math.random() * 800;
-      setTimeout(() => {
-        const botMsg = { id: Date.now() + 1, sender: 'bot', text: getBotResponse(text) };
-        setMessages(prev => [...prev, botMsg]);
-        setIsTyping(false);
-      }, delay);
-      return;
-    }
+    // Modern Gemini models in priority order
+    const MODELS = [
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-3-flash-preview',
+    ];
 
-    try {
-      // Build conversation history for context (last 10 messages)
-      const history = messages.slice(-10).map(m => ({
-        role: m.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }],
-      }));
+    let botText = null;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [{
-                text: `You are FitBot 🤖, an expert AI fitness and nutrition coach inside the FitTrack AI app.
-You specialise in evidence-based exercise science, sports nutrition, workout programming, and healthy habits.
-Keep replies practical, motivating, and concise (use bullet points and emojis where helpful).
-Focus exclusively on fitness, diet, exercise, health, and wellness topics.
-If asked about anything unrelated to fitness or health, politely redirect the user back to fitness topics.`,
-              }],
-            },
-            contents: [
-              ...history,
-              { role: 'user', parts: [{ text: text.trim() }] },
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 1024,
-            },
-          }),
+    if (apiKey && apiKey !== 'your_gemini_api_key_here') {
+      const systemInstruction = `You are FitBot 🤖, an expert AI fitness and nutrition coach inside the FitTrack AI app.
+Your mission is to provide personalized, evidence-based, practical, and highly motivating guidance on:
+- Weight gain, lean bulking, muscle building, mass gaining, calorie surplus
+- Weight loss, fat loss, cutting, calorie deficit
+- Diet, nutrition, meal plans, recipes, macros (protein, carbs, fats), hydration
+- Workouts (push-ups, squats, HIIT, strength training, home & gym splits)
+- Recovery, sleep, stretching, mobility, and supplements (whey, creatine, etc.)
+
+STRICT RULES:
+1. Fitness, Health & Diet Questions:
+   - When the user asks about fitness, weight (gain/loss), diet, nutrition, workouts, exercise routines, or health (including typos, imperfect grammar, or colloquial phrasing like 'wait gain', 'gain my wait', 'loose fat', 'protien', 'diet batao', 'gym routine', etc.):
+   - Understand their intent and provide a warm, thorough, well-structured, and actionable response.
+   - Include specific numbers, target macros, practical tips, and encouragement.
+   - Use clean formatting, bullet points, and appropriate emojis.
+2. Non-Fitness / Completely Unrelated Questions:
+   - If the user asks something completely unrelated to fitness, health, nutrition, or workouts (e.g., coding/programming, general trivia, homework, politics, celebrity gossip, movies, crypto/finance):
+   - Politely refuse to answer the non-fitness question.
+   - State clearly: "I am FitBot, your AI fitness and nutrition coach. I can only assist with fitness, diet, and health-related topics."
+   - Suggest 2 to 3 fitness topics they can ask about instead.`;
+
+      // Build context history (exclude initial greeting, limit to last 8 messages)
+      const validHistory = messages
+        .filter(m => m.id !== 1 && m.text)
+        .slice(-8)
+        .map(m => ({
+          role: m.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: m.text }],
+        }));
+
+      for (const model of MODELS) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: {
+                  parts: [{ text: systemInstruction }],
+                },
+                contents: [
+                  ...validHistory,
+                  { role: 'user', parts: [{ text: text.trim() }] },
+                ],
+                generationConfig: {
+                  temperature: 0.7,
+                  maxOutputTokens: 1024,
+                },
+              }),
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textResponse && textResponse.trim()) {
+              botText = textResponse.trim();
+              break; // Success! Exit model fallback loop
+            }
+          } else {
+            console.warn(`Model ${model} returned status ${response.status}`);
+          }
+        } catch (err) {
+          console.warn(`Error connecting to model ${model}:`, err);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
       }
-
-      const data = await response.json();
-      const botText =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        getBotResponse(text); // fallback if response is empty
-
-      const botMsg = { id: Date.now() + 1, sender: 'bot', text: botText };
-      setMessages(prev => [...prev, botMsg]);
-    } catch (err) {
-      console.error('Gemini API call failed:', err);
-      // Fall back to local knowledge base on error
-      const botMsg = { id: Date.now() + 1, sender: 'bot', text: getBotResponse(text) };
-      setMessages(prev => [...prev, botMsg]);
-    } finally {
-      setIsTyping(false);
     }
+
+    if (!botText) {
+      // Fallback to local knowledge base if API key is not configured or all models failed
+      botText = getBotResponse(text);
+    }
+
+    const botMsg = { id: Date.now() + 1, sender: 'bot', text: botText };
+    setMessages(prev => [...prev, botMsg]);
+    setIsTyping(false);
   };
 
   const handleSend = (e) => {
