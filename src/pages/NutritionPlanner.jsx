@@ -3,9 +3,18 @@ import {
   Sparkles, Crown, Lock, CreditCard, Smartphone, CheckCircle,
   ChevronRight, X, Loader2, Utensils, Target, Zap, Apple,
   BarChart3, Shield, RefreshCw, AlertCircle, User, Activity,
+  Flame, Droplets, Scale,
 } from 'lucide-react';
 import { isProUser, grantProAccess, getProMeta } from '../utils/proAccess';
-import { generateNutritionPlan, GOAL_LABELS, ACTIVITY_LABELS } from '../utils/nutritionEngine';
+import {
+  generateNutritionPlan,
+  generateAiNutritionPlan,
+  GOAL_LABELS,
+  ACTIVITY_LABELS,
+  DIET_LABELS,
+  calcBMR,
+  calcTDEE,
+} from '../utils/nutritionEngine';
 import { getCurrentUser } from '../utils/auth';
 import { getUserScopedKey } from '../utils/userDataManager';
 import { logEvent } from '../utils/analytics';
@@ -429,6 +438,53 @@ function MealCard({ meal }) {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   GENERATING STATE (AI LOADING SCREEN)
+══════════════════════════════════════════════════════════════════ */
+function GeneratingPlan({ isRegenerating = false }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const steps = [
+    'Calculating Basal Metabolic Rate (BMR) & Daily Expenditure...',
+    'Calibrating targeted calorie deficit/surplus & macros...',
+    'Consulting Gemini AI for customized recipes & exact portions...',
+    'Formulating workout-timed nutrition tips for your goal...',
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStepIndex((prev) => (prev + 1) % steps.length);
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  return (
+    <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+      <div className="glass rounded-3xl border border-brand-orange/30 p-8 sm:p-12 text-center max-w-md w-full animate-scale-in relative overflow-hidden shadow-glow-orange">
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/10 via-transparent to-amber-500/5 pointer-events-none" />
+
+        <div className="relative w-20 h-20 mx-auto mb-6">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand-orange to-amber-500 flex items-center justify-center shadow-glow-orange">
+            <Sparkles className="w-10 h-10 text-white animate-pulse" />
+          </div>
+          <div className="absolute inset-0 bg-brand-orange/30 rounded-3xl blur-xl animate-pulse" />
+        </div>
+
+        <h2 className="text-2xl font-black text-white mb-2">
+          {isRegenerating ? 'Generating AI Variation' : 'Crafting Your AI Meal Plan'}
+        </h2>
+        <p className="text-zinc-400 text-xs font-semibold mb-6">
+          Personalized to your exact calorie target, metabolism & dietary preferences
+        </p>
+
+        <div className="flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-xs text-brand-orange font-bold">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0 text-brand-orange" />
+          <span className="transition-opacity duration-300">{steps[stepIndex]}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NutritionForm({ onGenerate }) {
   const user = getCurrentUser();
   const [form, setForm] = useState({
@@ -438,6 +494,7 @@ function NutritionForm({ onGenerate }) {
     gender:   'male',
     goal:     'fat-loss',
     activity: 'medium',
+    diet:     'non-veg',
   });
   const [errors, setErrors] = useState({});
 
@@ -465,6 +522,7 @@ function NutritionForm({ onGenerate }) {
       gender:   form.gender,
       goal:     form.goal,
       activity: form.activity,
+      diet:     form.diet,
     });
   };
 
@@ -532,7 +590,7 @@ function NutritionForm({ onGenerate }) {
           </div>
 
           <Select
-            label="Gender (Optional)"
+            label="Gender"
             name="gender"
             value={form.gender}
             onChange={set}
@@ -552,6 +610,19 @@ function NutritionForm({ onGenerate }) {
           />
 
           <Select
+            label="Dietary Preference"
+            name="diet"
+            value={form.diet}
+            onChange={set}
+            options={[
+              { value: 'non-veg',    label: '🍗 Non-Vegetarian (Chicken, Fish, Eggs, Meat)' },
+              { value: 'veg',        label: '🥗 Vegetarian (Paneer, Tofu, Legumes, Dairy)' },
+              { value: 'eggetarian', label: '🥚 Eggetarian (Eggs + Vegetarian Foods)' },
+              { value: 'vegan',      label: '🌱 Vegan (100% Plant-Based, No Dairy/Eggs)' },
+            ]}
+          />
+
+          <Select
             label="Activity Level"
             name="activity"
             value={form.activity}
@@ -563,8 +634,8 @@ function NutritionForm({ onGenerate }) {
             ]}
           />
 
-          <button type="submit" className="btn-primary w-full py-4 text-base">
-            <Sparkles className="w-5 h-5" /> Generate My Meal Plan
+          <button type="submit" className="btn-primary w-full py-4 text-base shadow-glow-orange">
+            <Sparkles className="w-5 h-5" /> Generate My AI Meal Plan
           </button>
         </form>
       </div>
@@ -575,7 +646,7 @@ function NutritionForm({ onGenerate }) {
 /* ══════════════════════════════════════════════════════════════════
    RESULTS
 ══════════════════════════════════════════════════════════════════ */
-function NutritionResults({ plan, onReset }) {
+function NutritionResults({ plan, onReset, onRegenerate, isRegenerating }) {
   const goalColorClass = GOAL_COLORS[plan.goal] ?? GOAL_COLORS.maintenance;
 
   return (
@@ -583,43 +654,106 @@ function NutritionResults({ plan, onReset }) {
       <div className="content-width max-w-2xl space-y-6">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <h1 className="section-title">Your <span className="text-gradient">Meal Plan</span></h1>
-            <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mt-1">AI-generated · personalised for you</p>
+            <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mt-1">
+              AI-generated · calibrated for your metabolism
+            </p>
           </div>
-          <button onClick={onReset} className="btn-secondary text-xs px-4 py-2.5 shrink-0 flex items-center gap-2">
-            <RefreshCw className="w-3.5 h-3.5" /> Recalculate
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+              className="btn-primary text-xs px-3.5 py-2.5 flex items-center gap-1.5 shadow-glow-orange"
+              title="Generate a fresh variation with AI"
+            >
+              {isRegenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>New AI Plan</span>
+            </button>
+            <button
+              onClick={onReset}
+              className="btn-secondary text-xs px-3.5 py-2.5 flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Recalculate
+            </button>
+          </div>
         </div>
 
-        {/* Goal tag */}
-        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold ${goalColorClass}`}>
-          {GOAL_LABELS[plan.goal]}
-          <span className="text-zinc-600 font-normal">·</span>
-          <span className="text-[11px] font-semibold">{ACTIVITY_LABELS[plan.activity]}</span>
+        {/* Badges */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold ${goalColorClass}`}>
+            {GOAL_LABELS[plan.goal] || plan.goal}
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 text-xs font-semibold text-zinc-300">
+            {DIET_LABELS[plan.diet] || plan.diet}
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 text-xs font-semibold text-zinc-400">
+            {ACTIVITY_LABELS[plan.activity]?.split('(')[0]?.trim() || plan.activity}
+          </div>
+          {plan.isAiGenerated ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/15 border border-brand-orange/30 text-xs font-bold text-brand-orange">
+              <Sparkles className="w-3.5 h-3.5" /> AI Custom Plan
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 text-xs font-semibold text-zinc-400">
+              <Zap className="w-3.5 h-3.5 text-brand-orange" /> Smart Calorie Engine
+            </div>
+          )}
         </div>
 
         {/* Calorie target hero */}
         <div className="glass rounded-3xl border border-brand-orange/30 p-7 text-center relative overflow-hidden shadow-glow-orange">
-          <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/8 via-transparent to-amber-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/10 via-transparent to-amber-500/5 pointer-events-none" />
           <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">Daily Calorie Target</p>
           <p className="text-6xl font-black text-white">{plan.calories.toLocaleString()}</p>
           <p className="text-brand-orange font-black text-lg mt-1">kcal / day</p>
-          <p className="text-xs text-zinc-500 mt-2">Maintenance TDEE: {plan.tdee.toLocaleString()} kcal</p>
+
+          {/* Breakdown cards */}
+          <div className="grid grid-cols-3 gap-2 mt-6 pt-5 border-t border-zinc-800/80 max-w-lg mx-auto">
+            <div className="text-center px-2 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Basal BMR</p>
+              <p className="text-sm font-black text-white mt-0.5">
+                {plan.bmr || Math.round(plan.tdee / 1.55)} <span className="text-[10px] font-normal text-zinc-500">kcal</span>
+              </p>
+            </div>
+            <div className="text-center px-2 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Daily TDEE</p>
+              <p className="text-sm font-black text-white mt-0.5">
+                {plan.tdee} <span className="text-[10px] font-normal text-zinc-500">kcal</span>
+              </p>
+            </div>
+            <div className="text-center px-2 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Strategy</p>
+              <p className={`text-sm font-black mt-0.5 ${
+                plan.goal === 'fat-loss' ? 'text-red-400' : plan.goal === 'muscle' ? 'text-blue-400' : 'text-green-400'
+              }`}>
+                {plan.goal === 'fat-loss' ? `-${Math.abs(plan.adjustment || (plan.tdee - plan.calories))} kcal` :
+                 plan.goal === 'muscle' ? `+${Math.abs(plan.adjustment || (plan.calories - plan.tdee))} kcal` : 'Maintenance'}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Macros */}
         <div>
-          <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3">Daily Macros</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Daily Macro Targets</h2>
+            <span className="text-[11px] text-zinc-500 font-semibold">Total Target: {plan.calories} kcal</span>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <MacroPill label="Protein"  value={plan.protein} unit="g" color="border-blue-500/30"   />
             <MacroPill label="Carbs"    value={plan.carbs}   unit="g" color="border-amber-500/30"  />
             <MacroPill label="Fat"      value={plan.fat}     unit="g" color="border-red-500/30"    />
           </div>
-          <p className="text-[10px] text-zinc-600 mt-2 font-semibold">
-            Protein target: <span className="text-zinc-400">{plan.protein}g/day</span> · Spread evenly across all meals for best results.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500 mt-2.5 px-1 font-semibold">
+            <span>
+              Protein target: <span className="text-zinc-300 font-bold">{plan.protein}g/day</span> (~{Math.round((plan.protein * 4 / plan.calories) * 100)}% of intake)
+            </span>
+            <span>
+              Hydration: <span className="text-blue-400 font-bold">{((plan.weight || 70) * 0.035).toFixed(1)}L water daily</span>
+            </span>
+          </div>
         </div>
 
         {/* Meal plan */}
@@ -638,13 +772,16 @@ function NutritionResults({ plan, onReset }) {
             <div className="w-8 h-8 rounded-xl bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center">
               <Zap className="w-4 h-4 text-brand-orange" />
             </div>
-            <h2 className="text-sm font-black text-white">Workout-Based Diet Tips</h2>
+            <div>
+              <h2 className="text-sm font-black text-white">Targeted Nutrition & Workout Tips</h2>
+              <p className="text-[10px] text-zinc-500 font-semibold">Customized to your {plan.calories} kcal target</p>
+            </div>
           </div>
           <ul className="space-y-2.5">
-            {plan.tips.map((tip) => (
-              <li key={tip} className="flex items-start gap-3 text-sm text-zinc-300">
+            {plan.tips.map((tip, idx) => (
+              <li key={idx} className="flex items-start gap-3 text-sm text-zinc-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-orange/60 shrink-0 mt-2" />
-                {tip}
+                <span>{tip}</span>
               </li>
             ))}
           </ul>
@@ -652,7 +789,7 @@ function NutritionResults({ plan, onReset }) {
 
         {/* Disclaimer */}
         <p className="text-[10px] text-zinc-600 text-center leading-relaxed px-4">
-          ⚠️ This plan is generated algorithmically based on standard nutritional formulas. It is for informational purposes only and not a substitute for advice from a registered dietitian or medical professional.
+          ⚠️ This plan is generated dynamically based on standard nutritional formulas (Mifflin-St Jeor). It is for informational and educational purposes only and not a substitute for clinical advice from a medical professional.
         </p>
       </div>
     </div>
@@ -678,8 +815,11 @@ export default function NutritionPlanner() {
   // isProUser is scoped per userId — User B never inherits User A's PRO status
   const [pro,    setPro]    = useState(() => isProUser(userId));
   const [screen, setScreen] = useState(() => isProUser(userId) ? 'form' : 'paywall');
-  // 'paywall' | 'payment' | 'form' | 'results'
-  const [plan,   setPlan]   = useState(null);
+  // 'paywall' | 'payment' | 'form' | 'generating' | 'results'
+  const [plan,            setPlan]            = useState(null);
+  const [lastInputs,      setLastInputs]      = useState(null);
+  const [variationCount,  setVariationCount]  = useState(0);
+  const [isRegenerating,  setIsRegenerating]  = useState(false);
 
   // Keep PRO state in sync when payment completes or another tab grants it
   useEffect(() => {
@@ -709,20 +849,60 @@ export default function NutritionPlanner() {
     setScreen('form');
   }, [userId]);
 
-  const handleGenerate = useCallback((inputs) => {
-    const result = generateNutritionPlan(inputs);
-    setPlan(result);
-    setScreen('results');
-    logEvent('nutrition_plan_generated', { goal: inputs.goal, activity: inputs.activity });
-    if (result?.calories) {
-      logEvent('calorie_logged', { calories: result.calories, type: 'target' });
+  const handleGenerate = async (inputs) => {
+    setLastInputs(inputs);
+    setVariationCount(0);
+    setScreen('generating');
+    try {
+      const result = await generateAiNutritionPlan(inputs, 0);
+      setPlan(result);
+      setScreen('results');
+      logEvent('nutrition_plan_generated', { goal: inputs.goal, activity: inputs.activity, diet: inputs.diet });
+      if (result?.calories) {
+        logEvent('calorie_logged', { calories: result.calories, type: 'target' });
+      }
+    } catch (err) {
+      console.error('Error generating nutrition plan:', err);
+      const fallback = generateNutritionPlan(inputs, 0);
+      setPlan(fallback);
+      setScreen('results');
     }
-  }, []);
+  };
 
-  const handleReset = () => { setPlan(null); setScreen('form'); };
+  const handleRegenerate = async () => {
+    if (!lastInputs) return;
+    const nextVar = variationCount + 1;
+    setVariationCount(nextVar);
+    setIsRegenerating(true);
+    try {
+      const result = await generateAiNutritionPlan(lastInputs, nextVar);
+      setPlan(result);
+    } catch (err) {
+      console.error('Error regenerating nutrition plan:', err);
+      const fallback = generateNutritionPlan(lastInputs, nextVar);
+      setPlan(fallback);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleReset = () => {
+    setPlan(null);
+    setScreen('form');
+  };
 
   if (screen === 'paywall') return <Paywall onUpgrade={handleUpgradeClick} userEmail={currentUser?.email} />;
   if (screen === 'payment') return <MockPayment onSuccess={handlePaymentSuccess} onBack={() => setScreen('paywall')} />;
-  if (screen === 'results' && plan) return <NutritionResults plan={plan} onReset={handleReset} />;
+  if (screen === 'generating') return <GeneratingPlan isRegenerating={Boolean(plan)} />;
+  if (screen === 'results' && plan) {
+    return (
+      <NutritionResults
+        plan={plan}
+        onReset={handleReset}
+        onRegenerate={handleRegenerate}
+        isRegenerating={isRegenerating}
+      />
+    );
+  }
   return <NutritionForm onGenerate={handleGenerate} />;
 }

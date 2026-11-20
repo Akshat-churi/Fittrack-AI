@@ -71,25 +71,25 @@ function WorkoutSlideshow() {
   }, []);
 
   return (
-    <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl" style={{ height: '480px' }}>
+    <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl h-[340px] sm:h-[420px] md:h-[480px]">
       {SLIDES.map((slide, i) => (
         <div key={i} className="absolute inset-0 transition-all duration-700 ease-in-out"
           style={{ opacity: i === current ? 1 : 0, zIndex: i === current ? 1 : 0, transform: i === current ? 'scale(1)' : 'scale(1.06)' }}>
           <img src={slide.url} alt={slide.label} className="w-full h-full object-cover"
             loading={i === 0 ? 'eager' : 'lazy'} draggable={false} />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/10" />
           {/* colored top accent bar */}
           <div className="absolute top-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${slide.accent}, transparent)` }} />
 
-          <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12"
+          <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 md:p-12"
             style={{ transform: i === current ? 'translateY(0)' : 'translateY(24px)', opacity: i === current ? 1 : 0, transition: 'transform 0.7s cubic-bezier(0.22,1,0.36,1), opacity 0.7s ease', transitionDelay: i === current ? '0.12s' : '0s' }}>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest mb-3"
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest mb-2.5"
               style={{ background: `${slide.accent}22`, borderColor: `${slide.accent}55`, color: slide.accent }}>
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: slide.accent }} />
               {i + 1} / {SLIDES.length}
             </div>
-            <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight mb-2">{slide.label}</h2>
-            <p className="text-base md:text-lg text-white/80 font-medium">{slide.sub}</p>
+            <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-2">{slide.label}</h2>
+            <p className="text-sm sm:text-base md:text-lg text-white/90 font-medium">{slide.sub}</p>
           </div>
         </div>
       ))}
@@ -345,10 +345,10 @@ function FeatureCards() {
    QUICK LINKS SECTION
 ───────────────────────────────────────────────────────────────── */
 const QUICK_LINKS = [
-  { to: '/guide',       icon: BookOpen,   label: 'Fitness Guide',    desc: 'Learn correct form',     color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  { to: '/goals',       icon: Target,     label: 'Goal Tracker',     desc: 'Set & track targets',    color: 'text-purple-400',  bg: 'bg-purple-500/10 border-purple-500/20' },
-  { to: '/leaderboard', icon: Trophy,     label: 'Leaderboard',      desc: 'See who leads',          color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20' },
-  { to: '/social',      icon: Users,      label: 'Social',           desc: 'Connect & compete',      color: 'text-sky-400',     bg: 'bg-sky-500/10 border-sky-500/20' },
+  { to: '/guide', icon: BookOpen, label: 'Fitness Guide', desc: 'Learn correct form', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  { to: '/goals', icon: Target, label: 'Goal Tracker', desc: 'Set & track targets', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
+  { to: '/leaderboard', icon: Trophy, label: 'Leaderboard', desc: 'See who leads', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+  { to: '/social', icon: Users, label: 'Social', desc: 'Connect & compete', color: 'text-sky-400', bg: 'bg-sky-500/10 border-sky-500/20' },
 ];
 
 /* ─────────────────────────────────────────────────────────────────
@@ -372,13 +372,13 @@ function MiniProgressDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-brand-orange"/> Your Progress
+            <BarChart2 className="w-5 h-5 text-brand-orange" /> Your Progress
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">{weekStats.periodLabel}</p>
         </div>
         <Link to="/dashboard"
           className="flex items-center gap-1 text-xs font-bold text-brand-orange hover:text-amber-400 transition-colors">
-          Full Dashboard <ChevronRight className="w-3.5 h-3.5"/>
+          Full Dashboard <ChevronRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
@@ -386,13 +386,13 @@ function MiniProgressDashboard() {
         {/* Top stats strip */}
         <div className="grid grid-cols-4 divide-x divide-zinc-800/60">
           {[
-            { label: 'Workouts',  value: weekStats.totalWorkouts,               icon: Calendar, color: 'text-sky-400' },
-            { label: 'Reps',      value: weekStats.totalReps.toLocaleString(),  icon: Activity, color: 'text-brand-orange' },
-            { label: 'kcal',      value: weekStats.totalCalories,               icon: Flame,    color: 'text-red-400' },
-            { label: 'Streak',    value: `${currentStreak}d`,                   icon: Zap,      color: 'text-amber-400' },
+            { label: 'Workouts', value: weekStats.totalWorkouts, icon: Calendar, color: 'text-sky-400' },
+            { label: 'Reps', value: weekStats.totalReps.toLocaleString(), icon: Activity, color: 'text-brand-orange' },
+            { label: 'kcal', value: weekStats.totalCalories, icon: Flame, color: 'text-red-400' },
+            { label: 'Streak', value: `${currentStreak}d`, icon: Zap, color: 'text-amber-400' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="flex flex-col items-center justify-center py-4 px-2 gap-1">
-              <Icon className={`w-4 h-4 ${color} mb-0.5`}/>
+              <Icon className={`w-4 h-4 ${color} mb-0.5`} />
               <p className={`text-xl font-black ${color} leading-none`}>{value}</p>
               <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">{label}</p>
             </div>
@@ -412,7 +412,7 @@ function MiniProgressDashboard() {
                     style={{
                       height: `${Math.max(pct, 4)}%`,
                       background: isToday ? '#f97316' : d.reps > 0 ? 'rgba(249,115,22,0.4)' : 'rgba(63,63,70,0.4)',
-                    }}/>
+                    }} />
                   <span className="text-[8px] text-zinc-600 font-semibold truncate w-full text-center">{d.label}</span>
                 </div>
               );
@@ -430,7 +430,7 @@ function MiniProgressDashboard() {
             {recent.map((s, i) => (
               <div key={i} className="flex items-center gap-3 px-5 py-2.5">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${s.exerciseType?.toLowerCase().includes('push') ? 'bg-brand-orange/10 border border-brand-orange/20' : 'bg-sky-500/10 border border-sky-500/20'}`}>
-                  <Activity className={`w-3.5 h-3.5 ${s.exerciseType?.toLowerCase().includes('push') ? 'text-brand-orange' : 'text-sky-400'}`}/>
+                  <Activity className={`w-3.5 h-3.5 ${s.exerciseType?.toLowerCase().includes('push') ? 'text-brand-orange' : 'text-sky-400'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-white truncate">{s.exerciseType}</p>
@@ -465,10 +465,10 @@ export default function Home() {
   const { currentStreak } = useMemo(() => calculateStreaks(getWorkoutHistory()), []);
 
   const stats = [
-    { label: 'Points',   value: points.toLocaleString(),           icon: Trophy,   color: 'text-brand-orange', bg: 'bg-brand-orange/10 border-brand-orange/20' },
-    { label: 'Sessions', value: sessions,                           icon: BarChart2, color: 'text-accent-blue',  bg: 'bg-accent-blue/10 border-accent-blue/20' },
-    { label: 'Calories', value: totalCalories.toLocaleString(),    icon: Flame,    color: 'text-red-400',      bg: 'bg-red-500/10 border-red-500/20' },
-    { label: 'Streak',   value: `${currentStreak}d`,               icon: Zap,      color: 'text-amber-400',    bg: 'bg-amber-500/10 border-amber-500/20' },
+    { label: 'Points', value: points.toLocaleString(), icon: Trophy, color: 'text-brand-orange', bg: 'bg-brand-orange/10 border-brand-orange/20' },
+    { label: 'Sessions', value: sessions, icon: BarChart2, color: 'text-accent-blue', bg: 'bg-accent-blue/10 border-accent-blue/20' },
+    { label: 'Calories', value: totalCalories.toLocaleString(), icon: Flame, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
+    { label: 'Streak', value: `${currentStreak}d`, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
   ];
 
   return (
@@ -530,7 +530,7 @@ export default function Home() {
         </section>
 
         {/* ── Progress dashboard inline ── */}
-        <MiniProgressDashboard/>
+        <MiniProgressDashboard />
 
         {/* ── Photo grid + quick links (side by side on desktop) ── */}
         <section className="grid lg:grid-cols-2 gap-8 items-start">

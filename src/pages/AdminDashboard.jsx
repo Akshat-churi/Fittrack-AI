@@ -56,9 +56,9 @@ const buildStats = () => {
   const all = readUsers();
   return all.map((u) => {
     const history = readUserHistory(u.id);
-    const goals   = readUserGoals(u.id);
-    const points  = readUserPoints(u.id);
-    const pro     = u.isPro || isUserPro(u.id);
+    const goals = readUserGoals(u.id);
+    const points = readUserPoints(u.id);
+    const pro = u.isPro || isUserPro(u.id);
 
     const exerciseCounts = {};
     let totalCals = 0;
@@ -71,15 +71,15 @@ const buildStats = () => {
     return {
       ...u,
       password: undefined,
-      workoutCount:    history.length,
-      goalCount:       goals.length,
-      completedGoals:  goals.filter(g => g.status === 'completed').length,
-      totalReps:       history.reduce((s, h) => s + (h.reps || 0), 0),
-      totalCalories:   Math.round(totalCals),
+      workoutCount: history.length,
+      goalCount: goals.length,
+      completedGoals: goals.filter(g => g.status === 'completed').length,
+      totalReps: history.reduce((s, h) => s + (h.reps || 0), 0),
+      totalCalories: Math.round(totalCals),
       points,
-      isPro:           pro,
+      isPro: pro,
       exerciseCounts,
-      lastActive:      history[0]?.date || null,
+      lastActive: history[0]?.date || null,
     };
   });
 };
@@ -87,24 +87,24 @@ const buildStats = () => {
 /* ── Analytics aggregation helper ────────────────────────────────────────── */
 const buildAnalyticsStats = () => {
   const events = getEvents();
-  const count  = (type) => events.filter(e => e.type === type).length;
+  const count = (type) => events.filter(e => e.type === type).length;
   return {
-    signups:              count('user_signup'),
-    logins:               count('user_login'),
-    workoutsStarted:      count('workout_started'),
-    exercisesCompleted:   count('exercise_completed'),
-    repsAdded:            count('reps_added'),
-    postsCreated:         count('post_created'),
-    postsLiked:           count('post_liked'),
-    friendsAdded:         count('friend_added'),
-    goalsCreated:         count('goal_created'),
-    goalsCompleted:       count('goal_completed'),
-    proPurchaseAttempts:  count('pro_purchase_attempt'),
-    proPurchases:         count('pro_purchase_success'),
-    nutritionPlans:       count('nutrition_plan_generated'),
-    caloriesLogged:       count('calorie_logged'),
-    challengesJoined:     count('challenge_joined'),
-    challengesCompleted:  count('challenge_completed'),
+    signups: count('user_signup'),
+    logins: count('user_login'),
+    workoutsStarted: count('workout_started'),
+    exercisesCompleted: count('exercise_completed'),
+    repsAdded: count('reps_added'),
+    postsCreated: count('post_created'),
+    postsLiked: count('post_liked'),
+    friendsAdded: count('friend_added'),
+    goalsCreated: count('goal_created'),
+    goalsCompleted: count('goal_completed'),
+    proPurchaseAttempts: count('pro_purchase_attempt'),
+    proPurchases: count('pro_purchase_success'),
+    nutritionPlans: count('nutrition_plan_generated'),
+    caloriesLogged: count('calorie_logged'),
+    challengesJoined: count('challenge_joined'),
+    challengesCompleted: count('challenge_completed'),
   };
 };
 
@@ -160,12 +160,12 @@ const StatCard = ({ icon: Icon, label, value, sub, color = 'text-brand-orange', 
    SIDEBAR NAV
 ══════════════════════════════════════════════════════════════════ */
 const TABS = [
-  { id: 'overview',      label: 'Overview',          icon: LayoutDashboard },
-  { id: 'users',         label: 'User Management',   icon: Users },
-  { id: 'subscriptions', label: 'Subscriptions',     icon: Crown },
-  { id: 'workouts',      label: 'Workout Analytics', icon: Dumbbell },
-  { id: 'social',        label: 'Social Analytics',  icon: Heart },
-  { id: 'features',      label: 'Feature Usage',     icon: Zap },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'users', label: 'User Management', icon: Users },
+  { id: 'subscriptions', label: 'Subscriptions', icon: Crown },
+  { id: 'workouts', label: 'Workout Analytics', icon: Dumbbell },
+  { id: 'social', label: 'Social Analytics', icon: Heart },
+  { id: 'features', label: 'Feature Usage', icon: Zap },
 ];
 
 const Sidebar = ({ active, onSelect }) => {
@@ -179,11 +179,10 @@ const Sidebar = ({ active, onSelect }) => {
           <button
             key={id}
             onClick={() => onSelect(id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              active === id
-                ? 'bg-brand-orange/15 text-brand-orange border border-brand-orange/20'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-            }`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${active === id
+              ? 'bg-brand-orange/15 text-brand-orange border border-brand-orange/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+              }`}
           >
             <Icon className="w-4 h-4 shrink-0" />
             {label}
@@ -224,12 +223,12 @@ const OverviewTab = ({ users }) => {
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-        <StatCard icon={Users}       label="Total Users"       value={regular.length}             sub="Registered accounts"             color="text-sky-400"    bg="bg-sky-500/10"    border="border-sky-500/20" />
-        <StatCard icon={Activity}    label="Active Users"      value={activeUsers.length}         sub="At least 1 workout logged"       color="text-green-400"  bg="bg-green-500/10"  border="border-green-500/20" />
-        <StatCard icon={Dumbbell}    label="Total Workouts"    value={totalWorkouts}              sub="Completed sessions"              color="text-brand-orange" />
-        <StatCard icon={Crown}       label="PRO Subscribers"   value={proUsers.length}            sub={`of ${regular.length} users`}    color="text-amber-400"  bg="bg-amber-500/10"  border="border-amber-500/20" />
-        <StatCard icon={Target}      label="Goals Created"     value={totalGoals}                 sub="Across all accounts"             color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" />
-        <StatCard icon={Flame}       label="Total Reps"        value={totalReps.toLocaleString()} sub="Push-ups, squats & more"         color="text-red-400"    bg="bg-red-500/10"    border="border-red-500/20" />
+        <StatCard icon={Users} label="Total Users" value={regular.length} sub="Registered accounts" color="text-sky-400" bg="bg-sky-500/10" border="border-sky-500/20" />
+        <StatCard icon={Activity} label="Active Users" value={activeUsers.length} sub="At least 1 workout logged" color="text-green-400" bg="bg-green-500/10" border="border-green-500/20" />
+        <StatCard icon={Dumbbell} label="Total Workouts" value={totalWorkouts} sub="Completed sessions" color="text-brand-orange" />
+        <StatCard icon={Crown} label="PRO Subscribers" value={proUsers.length} sub={`of ${regular.length} users`} color="text-amber-400" bg="bg-amber-500/10" border="border-amber-500/20" />
+        <StatCard icon={Target} label="Goals Created" value={totalGoals} sub="Across all accounts" color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" />
+        <StatCard icon={Flame} label="Total Reps" value={totalReps.toLocaleString()} sub="Push-ups, squats & more" color="text-red-400" bg="bg-red-500/10" border="border-red-500/20" />
       </div>
 
       {/* Quick metrics row */}
@@ -284,18 +283,20 @@ const OverviewTab = ({ users }) => {
               <span className="text-xs font-black text-white">
                 {(() => {
                   const total = regular.reduce((s, u) => s + u.goalCount, 0);
-                  const done  = regular.reduce((s, u) => s + u.completedGoals, 0);
+                  const done = regular.reduce((s, u) => s + u.completedGoals, 0);
                   return total > 0 ? Math.round((done / total) * 100) : 0;
                 })()}%
               </span>
             </div>
             <div className="h-2 rounded-full bg-zinc-800">
               <div className="h-full rounded-full bg-purple-500 transition-all duration-700"
-                style={{ width: (() => {
-                  const total = regular.reduce((s, u) => s + u.goalCount, 0);
-                  const done  = regular.reduce((s, u) => s + u.completedGoals, 0);
-                  return total > 0 ? `${Math.round((done / total) * 100)}%` : '0%';
-                })() }} />
+                style={{
+                  width: (() => {
+                    const total = regular.reduce((s, u) => s + u.goalCount, 0);
+                    const done = regular.reduce((s, u) => s + u.completedGoals, 0);
+                    return total > 0 ? `${Math.round((done / total) * 100)}%` : '0%';
+                  })()
+                }} />
             </div>
 
             <div className="pt-2 border-t border-zinc-800/60">
@@ -349,10 +350,10 @@ const UsersTab = ({ users }) => {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Workouts',      value: u.workoutCount,              icon: Dumbbell,  color: 'text-brand-orange' },
-              { label: 'Total Reps',    value: u.totalReps.toLocaleString(), icon: Activity,  color: 'text-green-400' },
-              { label: 'Goals',         value: `${u.completedGoals}/${u.goalCount}`, icon: Target, color: 'text-purple-400' },
-              { label: 'Points',        value: u.points.toLocaleString(),   icon: Star,      color: 'text-amber-400' },
+              { label: 'Workouts', value: u.workoutCount, icon: Dumbbell, color: 'text-brand-orange' },
+              { label: 'Total Reps', value: u.totalReps.toLocaleString(), icon: Activity, color: 'text-green-400' },
+              { label: 'Goals', value: `${u.completedGoals}/${u.goalCount}`, icon: Target, color: 'text-purple-400' },
+              { label: 'Points', value: u.points.toLocaleString(), icon: Star, color: 'text-amber-400' },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="glass rounded-xl border border-zinc-800/60 p-4 text-center">
                 <Icon className={`w-5 h-5 ${color} mx-auto mb-2`} />
@@ -452,12 +453,12 @@ const UsersTab = ({ users }) => {
 ══════════════════════════════════════════════════════════════════ */
 const SubscriptionsTab = ({ users }) => {
   const regular = users.filter(u => u.role !== 'ADMIN');
-  const proCount  = regular.filter(u => u.isPro).length;
+  const proCount = regular.filter(u => u.isPro).length;
   const freeCount = regular.length - proCount;
-  const convRate  = regular.length > 0 ? Math.round((proCount / regular.length) * 100) : 0;
-  const mockMRR   = proCount * 499;
+  const convRate = regular.length > 0 ? Math.round((proCount / regular.length) * 100) : 0;
+  const mockMRR = proCount * 499;
 
-  const proUsers  = regular.filter(u => u.isPro);
+  const proUsers = regular.filter(u => u.isPro);
   const freeUsers = regular.filter(u => !u.isPro);
 
   return (
@@ -468,10 +469,10 @@ const SubscriptionsTab = ({ users }) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Crown}       label="PRO Users"        value={proCount}          color="text-amber-400"  bg="bg-amber-500/10"  border="border-amber-500/20" />
-        <StatCard icon={Users}       label="FREE Users"       value={freeCount}         color="text-sky-400"    bg="bg-sky-500/10"    border="border-sky-500/20" />
-        <StatCard icon={TrendingUp}  label="Conversion Rate"  value={`${convRate}%`}    color="text-green-400"  bg="bg-green-500/10"  border="border-green-500/20" sub="Free → PRO" />
-        <StatCard icon={DollarSign}  label="Est. MRR (Mock)"  value={`₹${mockMRR.toLocaleString()}`} color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" sub="₹499 × PRO users" />
+        <StatCard icon={Crown} label="PRO Users" value={proCount} color="text-amber-400" bg="bg-amber-500/10" border="border-amber-500/20" />
+        <StatCard icon={Users} label="FREE Users" value={freeCount} color="text-sky-400" bg="bg-sky-500/10" border="border-sky-500/20" />
+        <StatCard icon={TrendingUp} label="Conversion Rate" value={`${convRate}%`} color="text-green-400" bg="bg-green-500/10" border="border-green-500/20" sub="Free → PRO" />
+        <StatCard icon={DollarSign} label="Est. MRR (Mock)" value={`₹${mockMRR.toLocaleString()}`} color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" sub="₹499 × PRO users" />
       </div>
 
       {/* Ratio visual */}
@@ -525,10 +526,10 @@ const WorkoutsTab = ({ users }) => {
   const exerciseStats = buildExerciseStats(regular);
   const maxEx = exerciseStats[0]?.count || 1;
 
-  const totalWorkouts  = regular.reduce((s, u) => s + u.workoutCount, 0);
-  const totalReps      = regular.reduce((s, u) => s + u.totalReps, 0);
-  const totalCals      = regular.reduce((s, u) => s + u.totalCalories, 0);
-  const avgPerUser     = regular.length > 0 ? (totalWorkouts / regular.length).toFixed(1) : 0;
+  const totalWorkouts = regular.reduce((s, u) => s + u.workoutCount, 0);
+  const totalReps = regular.reduce((s, u) => s + u.totalReps, 0);
+  const totalCals = regular.reduce((s, u) => s + u.totalCalories, 0);
+  const avgPerUser = regular.length > 0 ? (totalWorkouts / regular.length).toFixed(1) : 0;
 
   const COLORS = [
     'bg-brand-orange', 'bg-amber-500', 'bg-red-500',
@@ -543,10 +544,10 @@ const WorkoutsTab = ({ users }) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Dumbbell}  label="Total Sessions"     value={totalWorkouts}              color="text-brand-orange" />
-        <StatCard icon={Activity}  label="Avg Sessions/User"  value={avgPerUser}                 color="text-sky-400"    bg="bg-sky-500/10"   border="border-sky-500/20" />
-        <StatCard icon={Zap}       label="Total Reps"         value={totalReps.toLocaleString()} color="text-green-400"  bg="bg-green-500/10" border="border-green-500/20" />
-        <StatCard icon={Flame}     label="Calories Burned"    value={`${totalCals.toLocaleString()} kcal`} color="text-red-400" bg="bg-red-500/10" border="border-red-500/20" />
+        <StatCard icon={Dumbbell} label="Total Sessions" value={totalWorkouts} color="text-brand-orange" />
+        <StatCard icon={Activity} label="Avg Sessions/User" value={avgPerUser} color="text-sky-400" bg="bg-sky-500/10" border="border-sky-500/20" />
+        <StatCard icon={Zap} label="Total Reps" value={totalReps.toLocaleString()} color="text-green-400" bg="bg-green-500/10" border="border-green-500/20" />
+        <StatCard icon={Flame} label="Calories Burned" value={`${totalCals.toLocaleString()} kcal`} color="text-red-400" bg="bg-red-500/10" border="border-red-500/20" />
       </div>
 
       <div className="glass rounded-2xl border border-zinc-800/60 p-6">
@@ -610,12 +611,12 @@ const SocialTab = ({ users, analytics }) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard icon={MessageSquare} label="Posts Created"   value={analytics.postsCreated}              color="text-sky-400"    bg="bg-sky-500/10"    border="border-sky-500/20" sub="Via PostCreator" />
-        <StatCard icon={Heart}         label="Post Likes"      value={analytics.postsLiked}                color="text-red-400"    bg="bg-red-500/10"    border="border-red-500/20" sub="Toggled likes" />
-        <StatCard icon={Users}         label="Friends Added"   value={analytics.friendsAdded}              color="text-green-400"  bg="bg-green-500/10"  border="border-green-500/20" sub="Bidirectional connections" />
-        <StatCard icon={Sword}         label="Challenges Joined" value={analytics.challengesJoined}       color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" sub="Accepted in Messages" />
-        <StatCard icon={CheckCircle}   label="Challenges Done" value={analytics.challengesCompleted}       color="text-amber-400"  bg="bg-amber-500/10"  border="border-amber-500/20" sub="Beaten in Workout" />
-        <StatCard icon={Star}          label="Total Points"    value={totalPoints.toLocaleString()}        color="text-brand-orange" sub="Across all users" />
+        <StatCard icon={MessageSquare} label="Posts Created" value={analytics.postsCreated} color="text-sky-400" bg="bg-sky-500/10" border="border-sky-500/20" sub="Via PostCreator" />
+        <StatCard icon={Heart} label="Post Likes" value={analytics.postsLiked} color="text-red-400" bg="bg-red-500/10" border="border-red-500/20" sub="Toggled likes" />
+        <StatCard icon={Users} label="Friends Added" value={analytics.friendsAdded} color="text-green-400" bg="bg-green-500/10" border="border-green-500/20" sub="Bidirectional connections" />
+        <StatCard icon={Sword} label="Challenges Joined" value={analytics.challengesJoined} color="text-purple-400" bg="bg-purple-500/10" border="border-purple-500/20" sub="Accepted in Messages" />
+        <StatCard icon={CheckCircle} label="Challenges Done" value={analytics.challengesCompleted} color="text-amber-400" bg="bg-amber-500/10" border="border-amber-500/20" sub="Beaten in Workout" />
+        <StatCard icon={Star} label="Total Points" value={totalPoints.toLocaleString()} color="text-brand-orange" sub="Across all users" />
       </div>
 
       <div className="glass rounded-2xl border border-zinc-800/60 p-6">
@@ -652,12 +653,12 @@ const FeaturesTab = ({ users, analytics }) => {
   const goalCompRate = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
 
   const features = [
-    { label: 'AI Workout Tracker (Camera)',   count: analytics.workoutsStarted,   icon: Activity,  color: 'bg-brand-orange', unit: 'sessions started' },
-    { label: 'Nutrition Planner (PRO)',       count: analytics.nutritionPlans,     icon: Utensils,  color: 'bg-amber-500',    unit: 'plans generated' },
-    { label: 'Goal Tracker',                  count: analytics.goalsCreated,       icon: Target,    color: 'bg-purple-500',   unit: 'goals created' },
-    { label: 'Social / Posts',                count: analytics.postsCreated,       icon: MessageSquare, color: 'bg-sky-500', unit: 'posts shared' },
-    { label: 'PRO Upgrade Attempts',          count: analytics.proPurchaseAttempts,icon: Crown,     color: 'bg-yellow-500',   unit: 'upgrade clicks' },
-    { label: 'Challenge Participation',       count: analytics.challengesJoined,   icon: Zap,       color: 'bg-red-500',      unit: 'challenges joined' },
+    { label: 'AI Workout Tracker (Camera)', count: analytics.workoutsStarted, icon: Activity, color: 'bg-brand-orange', unit: 'sessions started' },
+    { label: 'Nutrition Planner (PRO)', count: analytics.nutritionPlans, icon: Utensils, color: 'bg-amber-500', unit: 'plans generated' },
+    { label: 'Goal Tracker', count: analytics.goalsCreated, icon: Target, color: 'bg-purple-500', unit: 'goals created' },
+    { label: 'Social / Posts', count: analytics.postsCreated, icon: MessageSquare, color: 'bg-sky-500', unit: 'posts shared' },
+    { label: 'PRO Upgrade Attempts', count: analytics.proPurchaseAttempts, icon: Crown, color: 'bg-yellow-500', unit: 'upgrade clicks' },
+    { label: 'Challenge Participation', count: analytics.challengesJoined, icon: Zap, color: 'bg-red-500', unit: 'challenges joined' },
   ];
   const maxCount = Math.max(...features.map(f => f.count), 1);
 
@@ -730,8 +731,8 @@ const FeaturesTab = ({ users, analytics }) => {
    ROOT COMPONENT
 ══════════════════════════════════════════════════════════════════ */
 export default function AdminDashboard() {
-  const [tab, setTab]         = useState('overview');
-  const [users, setUsers]     = useState([]);
+  const [tab, setTab] = useState('overview');
+  const [users, setUsers] = useState([]);
   const [analytics, setAnalytics] = useState(() => buildAnalyticsStats());
   const [loading, setLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState(false);
@@ -757,12 +758,12 @@ export default function AdminDashboard() {
   }, []);
 
   const ActiveTab = useMemo(() => ({
-    overview:      OverviewTab,
-    users:         UsersTab,
+    overview: OverviewTab,
+    users: UsersTab,
     subscriptions: SubscriptionsTab,
-    workouts:      WorkoutsTab,
-    social:        SocialTab,
-    features:      FeaturesTab,
+    workouts: WorkoutsTab,
+    social: SocialTab,
+    features: FeaturesTab,
   })[tab] || OverviewTab, [tab]);
 
   return (
@@ -779,9 +780,8 @@ export default function AdminDashboard() {
             <div className="flex gap-2 min-w-max">
               {TABS.map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => setTab(id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    tab === id ? 'bg-brand-orange text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800/60'
-                  }`}>
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${tab === id ? 'bg-brand-orange text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800/60'
+                    }`}>
                   <Icon className="w-3.5 h-3.5" />{label}
                 </button>
               ))}

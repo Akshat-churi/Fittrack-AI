@@ -15,11 +15,10 @@ const FloatingChatButton = () => {
       to="/chat"
       aria-label="Open FitBot Assistant"
       title="Open FitBot Assistant"
-      className={`fixed right-5 bottom-5 sm:right-6 sm:bottom-6 z-50 flex h-16 w-16 items-center justify-center rounded-full border transition-all duration-200 shadow-[0_0_28px_rgba(255,126,51,0.35)] hover:-translate-y-1 hover:scale-105 active:scale-95 ${
-        isActive
-          ? 'bg-white text-brand-orange border-brand-orange/40'
-          : 'bg-brand-orange text-white border-white/10 hover:bg-[#ff8f4d]'
-      }`}
+      className={`fixed right-5 bottom-5 sm:right-6 sm:bottom-6 z-50 flex h-16 w-16 items-center justify-center rounded-full border transition-all duration-200 shadow-[0_0_28px_rgba(255,126,51,0.35)] hover:-translate-y-1 hover:scale-105 active:scale-95 ${isActive
+        ? 'bg-white text-brand-orange border-brand-orange/40'
+        : 'bg-brand-orange text-white border-white/10 hover:bg-[#ff8f4d]'
+        }`}
     >
       <span className="absolute inset-0 rounded-full bg-white/10"></span>
       <MessageCircle className="h-8 w-8" aria-hidden="true" />
